@@ -13,7 +13,7 @@ jobs:
         run: ls -R
 
       - name: Get current branch
-        run: echo "Current branch is: ${{ github.ref }}"
+        run: 'echo "Current branch is: ${{ github.ref }}"'
 
       - name: Show GitHub context
-        run: echo "GitHub context: ${{ toJson(github) }}"
+        run: 'echo "GitHub context: ${{ toJson(github) }}"'
