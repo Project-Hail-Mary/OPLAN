@@ -34,5 +34,5 @@ jobs:
       - name: Send webhook to Automic Automation
         run: |
           while IFS= read -r file; do
-            diff_link="https://github.com/${{ github.repository }}/compare/${{ steps.production_commit.outputs.commit }}...${{ github.sha }}#diff-$(echo ${file} | sed 's#/#%2F#g')"
 
+          done < changes.txt
