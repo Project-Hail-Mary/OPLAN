@@ -15,14 +15,9 @@ jobs:
       - name: List files in the repo
         run: ls -R
 
-      - name: Get list of modified files
-        id: changes
-        run: |
-          git diff --name-only ${{ github.event.before }} ${{ github.sha }} > changes.txt
-          cat changes.txt
-
       - name: Print diff links
         run: |
+          git diff --name-only ${{ github.event.before }} ${{ github.sha }} > changes.txt
           while IFS= read -r file; do
             diff_link="https://github.com/${{ github.repository }}/compare/${{ github.event.before }}...${{ github.sha }}#diff-$(echo ${file} | sed 's#/#%2F#g')"
             echo "File: ${file}"
