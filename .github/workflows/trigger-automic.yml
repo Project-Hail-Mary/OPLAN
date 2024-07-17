@@ -43,7 +43,7 @@ jobs:
 
     - name: Generate diff link and trigger Automic
       run: |
-        previous_commit=${{ steps.previous_commit.outputs.sha }}
+        previous_commit=${{ steps.production_commit.outputs.comparison_commit }}
         current_commit=$(git rev-parse HEAD)
 
         echo "Comparison SHA: $previous_commit"
