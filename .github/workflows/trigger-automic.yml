@@ -29,16 +29,26 @@ jobs:
       - name: Print git log
         run: git log -n 5
 
+      - name: Find the last commit with "Production" comment
+        id: production_commit
+        run: |
+          production_commit=$(git log -S"Production" --pretty=format:"%H" -1)
+          if [ -z "$production_commit" ]; then
+            production_commit=$(git rev-parse HEAD~1)
+          fi
+          echo "Production commit: ${production_commit}"
+          echo "::set-output name=commit::${production_commit}"
+
       - name: Print diff links
         run: |
-          echo "Previous SHA: ${{ github.event.before }}"
+          echo "Production SHA: ${{ steps.production_commit.outputs.commit }}"
           echo "Current SHA: ${{ github.sha }}"
-          git diff --name-only ${{ github.event.before }} ${{ github.sha }} > changes.txt
+          git diff --name-only ${{ steps.production_commit.outputs.commit }} ${{ github.sha }} > changes.txt
           cat changes.txt
           commit_url="https://github.com/${{ github.repository }}/commit/${{ github.sha }}"
           echo "Commit URL: ${commit_url}"
           while IFS= read -r file; do
-            diff_link="https://github.com/${{ github.repository }}/compare/${{ github.event.before }}...${{ github.sha }}#diff-$(echo ${file} | sed 's#/#%2F#g')"
+            diff_link="https://github.com/${{ github.repository }}/compare/${{ steps.production_commit.outputs.commit }}...${{ github.sha }}#diff-$(echo ${file} | sed 's#/#%2F#g')"
             echo "File: ${file}"
             echo "Diff link: ${diff_link}"
           done < changes.txt
@@ -47,7 +57,7 @@ jobs:
         run: |
           commit_url="https://github.com/${{ github.repository }}/commit/${{ github.sha }}"
           while IFS= read -r file; do
-            diff_link="https://github.com/${{ github.repository }}/compare/${{ github.event.before }}...${{ github.sha }}#diff-$(echo ${file} | sed 's#/#%2F#g')"
+            diff_link="https://github.com/${{ github.repository }}/compare/${{ steps.production_commit.outputs.commit }}...${{ github.sha }}#diff-$(echo ${file} | sed 's#/#%2F#g')"
             curl --location 'http://104.196.70.116:8088/ae/api/v1/103/executions' \
               --header 'Content-Type: application/json' \
               --user '103/UDM/UDM:udm' \
