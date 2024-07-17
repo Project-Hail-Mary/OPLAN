@@ -8,6 +8,11 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
+        with:
+          fetch-depth: 2  # Increase fetch depth to include previous commits
+
+      - name: Print environment variables
+        run: env
 
       - name: Print working directory
         run: pwd
@@ -15,8 +20,14 @@ jobs:
       - name: List files in the repo
         run: ls -R
 
+      - name: Print contents of .git directory
+        run: ls -R .git
+
       - name: Print git status
         run: git status
+
+      - name: Print git log
+        run: git log -n 5
 
       - name: Print diff links
         run: |
