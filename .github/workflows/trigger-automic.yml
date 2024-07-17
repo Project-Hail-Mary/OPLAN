@@ -12,14 +12,10 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v2
 
-      - name: Debug: List files in the repo
-        run: ls -R
-
       - name: Get list of modified files
         id: changes
         run: |
           git diff --name-only ${{ github.event.before }} ${{ github.sha }} > changes.txt
-          cat changes.txt
           echo "::set-output name=files::$(cat changes.txt)"
 
       - name: Find the last commit with "Production" comment
