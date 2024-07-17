@@ -61,8 +61,10 @@ jobs:
           cat changes.txt
           while IFS= read -r file; do
             # Construct the comparison URL
-            diff_link="https://github.com/${{ github.repository }}/compare/${{ steps.determine-commit.outputs.comparison_commit }}...${{ github.sha }}?diff=split&w=&short_path=$(echo ${file} | sed 's#/#%2F#g')"
+            encoded_file=$(echo ${file} | sed 's#/#%2F#g')
+            diff_link="https://github.com/${{ github.repository }}/compare/${{ steps.determine-commit.outputs.comparison_commit }}...${{ github.sha }}?diff=split&w=&short_path=${encoded_file}"
             echo "File: ${file}"
+            echo "Encoded File: ${encoded_file}"
             echo "Diff link: ${diff_link}"
           done < changes.txt
 
@@ -71,7 +73,9 @@ jobs:
           while IFS= read -r file; do
             if [ "$file" != ".github/workflows/trigger-automic.yml" ]; then
               # Construct the comparison URL
-              diff_link="https://github.com/${{ github.repository }}/compare/${{ steps.determine-commit.outputs.comparison_commit }}...${{ github.sha }}?diff=split&w=&short_path=$(echo ${file} | sed 's#/#%2F#g')"
+              encoded_file=$(echo ${file} | sed 's#/#%2F#g')
+              diff_link="https://github.com/${{ github.repository }}/compare/${{ steps.determine-commit.outputs.comparison_commit }}...${{ github.sha }}?diff=split&w=&short_path=${encoded_file}"
+              echo "Constructed diff link: ${diff_link}"  # Debug output for the URL
               curl --location 'http://104.196.70.116:8088/ae/api/v1/103/executions' \
                 --header 'Content-Type: application/json' \
                 --user '103/UDM/UDM:udm' \
