@@ -1,6 +1,9 @@
 name: Trigger Automic Automation
 
-on: [push]
+on:
+  push:
+    paths:
+      - '**/*.md'
 
 jobs:
   trigger-automic:
@@ -9,7 +12,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v2
 
-      - name: Debug: List files in the repo
+      - name: List files in the repo
         run: ls -R
 
       - name: Get list of modified files
