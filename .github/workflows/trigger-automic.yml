@@ -30,7 +30,7 @@ jobs:
           comments=$(git notes show $sha 2>/dev/null || true)
           if [[ $comments == *"Production"* ]]; then
             production_commit=$sha
-            break
+            break;
           fi
         done
 
@@ -56,17 +56,14 @@ jobs:
           if [ "$file" != ".github/workflows/trigger-automic.yml" ]; then
             # Construct the comparison URL
             encoded_file=$(echo ${file} | sed 's#/#%2F#g')
-            diff_link="https://github.com/Project-Hail-Mary/OPLAN/compare/${previous_commit}...${current_commit}?diff=split&w=&short_path=${encoded_file}"
+            diff_link="https://github.com/Project-Hail-Mary/OPLAN/compare/${previous_commit}...${current_commit}?diff=split%26w=%26short_path=${encoded_file}"
 
-            # Escape & by replacing it with &&
-            diff_link_escaped=$(echo ${diff_link} | sed 's/&/&&/g')
-
-            echo "Constructed diff link: ${diff_link_escaped}"  # Debug output for the URL
+            echo "Constructed diff link: ${diff_link}"  # Debug output for the URL
 
             curl --location 'http://104.196.70.116:8088/ae/api/v1/103/executions' \
               --header 'Content-Type: application/json' \
               --user '103/UDM/UDM:udm' \
-              --data "{\"object_name\": \"GITHUB.PRE.APPROVE\", \"inputs\": {\"&FILE#\": \"${file}\", \"&DIFF_LINK#\": \"${diff_link_escaped}\"}}"
+              --data "{\"object_name\": \"GITHUB.PRE.APPROVE\", \"inputs\": {\"&FILE#\": \"${file}\", \"&DIFF_LINK#\": \"${diff_link}\"}}"
           else
             echo "Skipping curl command for .github/workflows/trigger-automic.yml"
           fi
