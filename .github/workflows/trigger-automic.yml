@@ -20,7 +20,6 @@ jobs:
         run: |
           git diff --name-only ${{ github.event.before }} ${{ github.sha }} > changes.txt
           cat changes.txt
-          echo "::set-output name=files::$(cat changes.txt)"
 
       - name: Find the last commit with "Production" comment
         id: production_commit
@@ -29,6 +28,7 @@ jobs:
           if [ -z "$production_commit" ]; then
             production_commit=$(git rev-parse HEAD~1)
           fi
+          echo "Production commit: ${production_commit}"
           echo "::set-output name=commit::${production_commit}"
 
       - name: Send webhook to Automic Automation
@@ -40,5 +40,3 @@ jobs:
               --header 'Authorization: Bearer YOUR_TOKEN' \
               --data "{\"object_name\": \"GITHUB.TEST\", \"inputs\": {\"&FILE#\": \"${file}\", \"&DIFF_LINK#\": \"${diff_link}\"}}"
           done < changes.txt
-        env:
-          files: ${{ steps.changes.outputs.files }}
