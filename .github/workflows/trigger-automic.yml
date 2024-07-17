@@ -68,3 +68,5 @@ jobs:
               echo "Skipping curl command for .github/workflows/trigger-automic.yml"
             fi
           done < changes.txt
+
+
