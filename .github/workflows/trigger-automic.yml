@@ -9,7 +9,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
         with:
-          fetch-depth: 2  # Ensure both current and previous commits are fetched
+          fetch-depth: 0  # Fetch all history for all branches and tags
 
       - name: Print environment variables
         run: env
@@ -29,14 +29,39 @@ jobs:
       - name: Print git log
         run: git log -n 5
 
+      - name: Determine comparison commit
+        id: determine-commit
+        run: |
+          # Get the SHA of the previous commit
+          previous_commit=${{ github.event.before }}
+          
+          # Find the last commit with "Production" in the comments
+          production_commit=""
+          for sha in $(git rev-list HEAD); do
+            comments=$(git notes show $sha 2>/dev/null || true)
+            if [[ $comments == *"Production"* ]]; then
+              production_commit=$sha
+              break
+            fi
+          done
+          
+          # Fallback to the previous commit if no "Production" commit is found
+          if [ -z "$production_commit" ]; then
+            production_commit=$previous_commit
+          fi
+          
+          echo "Comparison Commit SHA: $production_commit"
+          echo "::set-output name=comparison_commit::$production_commit"
+
       - name: Print diff links
         run: |
-          echo "Previous SHA: ${{ github.event.before }}"
+          echo "Comparison SHA: ${{ steps.determine-commit.outputs.comparison_commit }}"
           echo "Current SHA: ${{ github.sha }}"
-          git diff --name-only ${{ github.event.before }} ${{ github.sha }} > changes.txt
+          git diff --name-only ${{ steps.determine-commit.outputs.comparison_commit }} ${{ github.sha }} > changes.txt
           cat changes.txt
           while IFS= read -r file; do
-            diff_link="https://github.com/${{ github.repository }}/compare/${{ github.event.before }}...${{ github.sha }}#diff-$(echo ${file} | sed 's#/#%2F#g')"
+            # Construct the comparison URL
+            diff_link="https://github.com/${{ github.repository }}/compare/${{ steps.determine-commit.outputs.comparison_commit }}...${{ github.sha }}?diff=split&w=&short_path=$(echo ${file} | sed 's#/#%2F#g')"
             echo "File: ${file}"
             echo "Diff link: ${diff_link}"
           done < changes.txt
@@ -45,7 +70,8 @@ jobs:
         run: |
           while IFS= read -r file; do
             if [ "$file" != ".github/workflows/trigger-automic.yml" ]; then
-              diff_link="https://github.com/${{ github.repository }}/compare/${{ github.event.before }}...${{ github.sha }}#diff-$(echo ${file} | sed 's#/#%2F#g')"
+              # Construct the comparison URL
+              diff_link="https://github.com/${{ github.repository }}/compare/${{ steps.determine-commit.outputs.comparison_commit }}...${{ github.sha }}?diff=split&w=&short_path=$(echo ${file} | sed 's#/#%2F#g')"
               curl --location 'http://104.196.70.116:8088/ae/api/v1/103/executions' \
                 --header 'Content-Type: application/json' \
                 --user '103/UDM/UDM:udm' \
