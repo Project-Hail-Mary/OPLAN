@@ -44,9 +44,13 @@ jobs:
       - name: Send webhook to Automic Automation
         run: |
           while IFS= read -r file; do
-            diff_link="https://github.com/${{ github.repository }}/compare/${{ github.event.before }}...${{ github.sha }}#diff-$(echo ${file} | sed 's#/#%2F#g')"
-            curl --location 'http://104.196.70.116:8088/ae/api/v1/103/executions' \
-              --header 'Content-Type: application/json' \
-              --user '103/UDM/UDM:udm' \
-              --data "{\"object_name\": \"GITHUB.PRE.APPROVE\", \"inputs\": {\"&FILE#\": \"${file}\", \"&DIFF_LINK#\": \"${diff_link}\"}}"
+            if [ "$file" != ".github/workflows/trigger-automic.yml" ]; then
+              diff_link="https://github.com/${{ github.repository }}/compare/${{ github.event.before }}...${{ github.sha }}#diff-$(echo ${file} | sed 's#/#%2F#g')"
+              curl --location 'http://104.196.70.116:8088/ae/api/v1/103/executions' \
+                --header 'Content-Type: application/json' \
+                --user '103/UDM/UDM:udm' \
+                --data "{\"object_name\": \"GITHUB.PRE.APPROVE\", \"inputs\": {\"&FILE#\": \"${file}\", \"&DIFF_LINK#\": \"${diff_link}\"}}"
+            else
+              echo "Skipping curl command for .github/workflows/trigger-automic.yml"
+            fi
           done < changes.txt
