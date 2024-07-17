@@ -37,7 +37,7 @@ jobs:
             diff_link="https://github.com/${{ github.repository }}/compare/${{ steps.production_commit.outputs.commit }}...${{ github.sha }}#diff-$(echo ${file} | sed 's#/#%2F#g')"
             curl --location 'http://104.196.70.116:8088/ae/api/v1/103/executions' \
               --header 'Content-Type: application/json' \
-              --header 'Authorization: ••••••' \
+              --header 'Authorization: Bearer YOUR_TOKEN' \
               --data "{\"object_name\": \"GITHUB.TEST\", \"inputs\": {\"&FILE#\": \"${file}\", \"&DIFF_LINK#\": \"${diff_link}\"}}"
           done < changes.txt
         env:
