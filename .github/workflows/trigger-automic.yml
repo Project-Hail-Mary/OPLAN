@@ -1,86 +1,73 @@
 name: Trigger Automic Automation
 
-on: [push]
+on:
+  push:
+    branches:
+      - main
 
 jobs:
   trigger-automic:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
-        with:
-          fetch-depth: 0  # Fetch all history for all branches and tags
+    - name: Checkout repository
+      uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
 
-      - name: Print environment variables
-        run: env
+    - name: Get the SHA of the previous commit
+      id: previous_commit
+      run: |
+        previous_commit=$(git log -2 --format=format:%H | tail -n 1)
+        echo "Previous Commit SHA: $previous_commit"
+        echo "::set-output name=sha::$previous_commit"
 
-      - name: Print working directory
-        run: pwd
-
-      - name: List files in the repo
-        run: ls -R
-
-      - name: Print contents of .git directory
-        run: ls -R .git
-
-      - name: Print git status
-        run: git status
-
-      - name: Print git log
-        run: git log -n 5
-
-      - name: Determine comparison commit
-        id: determine-commit
-        run: |
-          # Get the SHA of the previous commit
-          previous_commit=${{ github.event.before }}
-          
-          # Find the last commit with "Production" in the comments
-          production_commit=""
-          for sha in $(git rev-list HEAD); do
-            comments=$(git notes show $sha 2>/dev/null || true)
-            if [[ $comments == *"Production"* ]]; then
-              production_commit=$sha
-              break
-            fi
-          done
-          
-          # Fallback to the previous commit if no "Production" commit is found
-          if [ -z "$production_commit" ]; then
-            production_commit=$previous_commit
+    - name: Find the last commit with "Production" in the comments
+      id: production_commit
+      run: |
+        production_commit=""
+        for sha in $(git rev-list HEAD); do
+          comments=$(git notes show $sha 2>/dev/null || true)
+          if [[ $comments == *"Production"* ]]; then
+            production_commit=$sha
+            break
           fi
-          
-          echo "Comparison Commit SHA: $production_commit"
-          echo "::set-output name=comparison_commit::$production_commit"
+        done
 
-      - name: Print diff links
-        run: |
-          echo "Comparison SHA: ${{ steps.determine-commit.outputs.comparison_commit }}"
-          echo "Current SHA: ${{ github.sha }}"
-          git diff --name-only ${{ steps.determine-commit.outputs.comparison_commit }} ${{ github.sha }} > changes.txt
-          cat changes.txt
-          while IFS= read -r file; do
+        if [ -z "$production_commit" ]; then
+          production_commit=${{ steps.previous_commit.outputs.sha }}
+        fi
+
+        echo "Comparison Commit SHA: $production_commit"
+        echo "::set-output name=comparison_commit::$production_commit"
+
+    - name: Generate diff link and trigger Automic
+      run: |
+        previous_commit=${{ steps.previous_commit.outputs.sha }}
+        current_commit=$(git rev-parse HEAD)
+
+        echo "Comparison SHA: $previous_commit"
+        echo "Current SHA: $current_commit"
+
+        git diff --name-only $previous_commit $current_commit > changes.txt
+        cat changes.txt
+
+        while IFS= read -r file; do
+          if [ "$file" != ".github/workflows/trigger-automic.yml" ]; then
             # Construct the comparison URL
             encoded_file=$(echo ${file} | sed 's#/#%2F#g')
-            diff_link="https://github.com/${{ github.repository }}/compare/${{ steps.determine-commit.outputs.comparison_commit }}...${{ github.sha }}?diff=split&w=&short_path=${encoded_file}"
-            echo "File: ${file}"
-            echo "Encoded File: ${encoded_file}"
-            echo "Diff link: ${diff_link}"
-          done < changes.txt
+            diff_link="https://github.com/Project-Hail-Mary/OPLAN/compare/${previous_commit}...${current_commit}?diff=split&w=&short_path=${encoded_file}"
 
-      - name: Send webhook to Automic Automation
-        run: |
-          while IFS= read -r file; do
-            if [ "$file" != ".github/workflows/trigger-automic.yml" ]; then
-              # Construct the comparison URL
-              encoded_file=$(echo ${file} | sed 's#/#%2F#g')
-              diff_link="https://github.com/${{ github.repository }}/compare/${{ steps.determine-commit.outputs.comparison_commit }}...${{ github.sha }}?diff=split&w=&short_path=${encoded_file}"
-              echo "Constructed diff link: ${diff_link}"  # Debug output for the URL
-              curl --location 'http://104.196.70.116:8088/ae/api/v1/103/executions' \
-                --header 'Content-Type: application/json' \
-                --user '103/UDM/UDM:udm' \
-                --data "{\"object_name\": \"GITHUB.PRE.APPROVE\", \"inputs\": {\"&FILE#\": \"${file}\", \"&DIFF_LINK#\": \"${diff_link}\"}}"
-            else
-              echo "Skipping curl command for .github/workflows/trigger-automic.yml"
-            fi
-          done < changes.txt
+            # Escape & by replacing it with &&
+            diff_link_escaped=$(echo ${diff_link} | sed 's/&/&&/g')
+
+            echo "Constructed diff link: ${diff_link_escaped}"  # Debug output for the URL
+
+            curl --location 'http://104.196.70.116:8088/ae/api/v1/103/executions' \
+              --header 'Content-Type: application/json' \
+              --user '103/UDM/UDM:udm' \
+              --data "{\"object_name\": \"GITHUB.PRE.APPROVE\", \"inputs\": {\"&FILE#\": \"${file}\", \"&DIFF_LINK#\": \"${diff_link_escaped}\"}}"
+          else
+            echo "Skipping curl command for .github/workflows/trigger-automic.yml"
+          fi
+        done < changes.txt
