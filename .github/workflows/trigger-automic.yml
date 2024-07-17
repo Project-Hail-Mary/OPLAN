@@ -7,14 +7,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: List files in the repo
         run: ls -R
 
       - name: Print diff links
         run: |
+          echo "Previous SHA: ${{ github.event.before }}"
+          echo "Current SHA: ${{ github.sha }}"
           git diff --name-only ${{ github.event.before }} ${{ github.sha }} > changes.txt
+          cat changes.txt
           while IFS= read -r file; do
             diff_link="https://github.com/${{ github.repository }}/compare/${{ github.event.before }}...${{ github.sha }}#diff-$(echo ${file} | sed 's#/#%2F#g')"
             echo "File: ${file}"
