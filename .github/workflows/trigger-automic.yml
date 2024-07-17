@@ -12,11 +12,14 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v2
 
+      - name: List files in the repo
+        run: ls -R
+
       - name: Get list of modified files
         id: changes
         run: |
           git diff --name-only ${{ github.event.before }} ${{ github.sha }} > changes.txt
-          echo "::set-output name=files::$(cat changes.txt)"
+          cat changes.txt
 
       - name: Find the last commit with "Production" comment
         id: production_commit
@@ -25,6 +28,7 @@ jobs:
           if [ -z "$production_commit" ]; then
             production_commit=$(git rev-parse HEAD~1)
           fi
+          echo "Production commit: ${production_commit}"
           echo "::set-output name=commit::${production_commit}"
 
       - name: Send webhook to Automic Automation
@@ -33,8 +37,6 @@ jobs:
             diff_link="https://github.com/${{ github.repository }}/compare/${{ steps.production_commit.outputs.commit }}...${{ github.sha }}#diff-$(echo ${file} | sed 's#/#%2F#g')"
             curl --location 'http://104.196.70.116:8088/ae/api/v1/103/executions' \
               --header 'Content-Type: application/json' \
-              --header 'Authorization: ••••••' \
+              --user '103/UDM/UDM:udm' \
               --data "{\"object_name\": \"GITHUB.TEST\", \"inputs\": {\"&FILE#\": \"${file}\", \"&DIFF_LINK#\": \"${diff_link}\"}}"
           done < changes.txt
-        env:
-          files: ${{ steps.changes.outputs.files }}
