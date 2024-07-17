@@ -9,8 +9,14 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
 
+      - name: Print working directory
+        run: pwd
+
       - name: List files in the repo
         run: ls -R
+
+      - name: Print git status
+        run: git status
 
       - name: Print diff links
         run: |
