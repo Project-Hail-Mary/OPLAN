@@ -1,6 +1,9 @@
 name: Trigger Automic Automation
 
-on: [push]
+on:
+  push:
+    paths-ignore:
+      - '.github/workflows/trigger-automic.yml'
 
 jobs:
   trigger-automic:
