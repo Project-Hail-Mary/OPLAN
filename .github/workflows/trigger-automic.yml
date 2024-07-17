@@ -1,9 +1,6 @@
 name: Trigger Automic Automation
 
-on:
-  push:
-    paths-ignore:
-      - '.github/workflows/trigger-automic.yml'
+on: [push]
 
 jobs:
   trigger-automic:
@@ -12,7 +9,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
         with:
-          fetch-depth: 0  # Fetch all history for the repository
+          fetch-depth: 2  # Ensure both current and previous commits are fetched
 
       - name: Print environment variables
         run: env
@@ -32,40 +29,24 @@ jobs:
       - name: Print git log
         run: git log -n 5
 
-      - name: Find the last commit with "Production" comment
-        id: production_commit
-        run: |
-          production_commit=$(git log -S"Production" --pretty=format:"%H" -1)
-          if [ -z "$production_commit" ]; then
-            echo "No commit with 'Production' comment found. Using previous commit."
-            production_commit=$(git rev-parse HEAD~1)
-          fi
-          echo "Production commit: ${production_commit}"
-          echo "::set-output name=commit::${production_commit}"
-
       - name: Print diff links
         run: |
-          production_commit=${{ steps.production_commit.outputs.commit }}
-          echo "Production SHA: $production_commit"
+          echo "Previous SHA: ${{ github.event.before }}"
           echo "Current SHA: ${{ github.sha }}"
-          git diff --name-only $production_commit ${{ github.sha }} > changes.txt
+          git diff --name-only ${{ github.event.before }} ${{ github.sha }} > changes.txt
           cat changes.txt
-          commit_url="https://github.com/${{ github.repository }}/commit/${{ github.sha }}"
-          echo "Commit URL: ${commit_url}"
           while IFS= read -r file; do
-            diff_link="https://github.com/${{ github.repository }}/compare/$production_commit...${{ github.sha }}#diff-$(echo ${file} | sed 's#/#%2F#g')"
+            diff_link="https://github.com/${{ github.repository }}/compare/${{ github.event.before }}...${{ github.sha }}#diff-$(echo ${file} | sed 's#/#%2F#g')"
             echo "File: ${file}"
             echo "Diff link: ${diff_link}"
           done < changes.txt
 
       - name: Send webhook to Automic Automation
         run: |
-          production_commit=${{ steps.production_commit.outputs.commit }}
-          commit_url="https://github.com/${{ github.repository }}/commit/${{ github.sha }}"
           while IFS= read -r file; do
-            diff_link="https://github.com/${{ github.repository }}/compare/$production_commit...${{ github.sha }}#diff-$(echo ${file} | sed 's#/#%2F#g')"
+            diff_link="https://github.com/${{ github.repository }}/compare/${{ github.event.before }}...${{ github.sha }}#diff-$(echo ${file} | sed 's#/#%2F#g')"
             curl --location 'http://104.196.70.116:8088/ae/api/v1/103/executions' \
               --header 'Content-Type: application/json' \
               --user '103/UDM/UDM:udm' \
-              --data "{\"object_name\": \"GITHUB.PRE.APPROVE\", \"inputs\": {\"&FILE#\": \"${commit_url}\", \"&DIFF_LINK#\": \"${diff_link}\"}}"
+              --data "{\"object_name\": \"GITHUB.PRE.APPROVE\", \"inputs\": {\"&FILE#\": \"${file}\", \"&DIFF_LINK#\": \"${diff_link}\"}}"
           done < changes.txt
