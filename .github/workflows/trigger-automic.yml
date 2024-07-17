@@ -9,7 +9,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
         with:
-          fetch-depth: 2  # Ensure both current and previous commits are fetched
+          fetch-depth: 0  # Fetch all history for the repository
 
       - name: Print environment variables
         run: env
@@ -34,7 +34,8 @@ jobs:
         run: |
           production_commit=$(git log -S"Production" --pretty=format:"%H" -1)
           if [ -z "$production_commit" ]; then
-            production_commit=$(git rev-parse HEAD~1)
+            echo "No commit with 'Production' comment found."
+            exit 1
           fi
           echo "Production commit: ${production_commit}"
           echo "::set-output name=commit::${production_commit}"
