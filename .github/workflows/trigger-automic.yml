@@ -26,15 +26,19 @@ jobs:
       id: production_commit
       run: |
         production_commit=""
+        echo "Searching for commits with 'Production' in the comments..."
         for sha in $(git rev-list HEAD); do
           comments=$(git notes show $sha 2>/dev/null || true)
+          echo "Checking commit $sha"
           if [[ $comments == *"Production"* ]]; then
+            echo "Found 'Production' comment in commit $sha"
             production_commit=$sha
-            break;
+            break
           fi
         done
 
         if [ -z "$production_commit" ]; then
+          echo "No commit with 'Production' comment found. Using previous commit."
           production_commit=${{ steps.previous_commit.outputs.sha }}
         fi
 
