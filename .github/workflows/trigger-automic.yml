@@ -21,18 +21,10 @@ jobs:
           git diff --name-only ${{ github.event.before }} ${{ github.sha }} > changes.txt
           cat changes.txt
 
-      - name: Find the last commit with "Production" comment
-        id: production_commit
-        run: |
-          production_commit=$(git log -S"Production" --pretty=format:"%H" -1)
-          if [ -z "$production_commit" ]; then
-            production_commit=$(git rev-parse HEAD~1)
-          fi
-          echo "Production commit: ${production_commit}"
-          echo "::set-output name=commit::${production_commit}"
-
       - name: Print diff links
         run: |
           while IFS= read -r file; do
-            echo "test"
+            diff_link="https://github.com/${{ github.repository }}/compare/${{ github.event.before }}...${{ github.sha }}#diff-$(echo ${file} | sed 's#/#%2F#g')"
+            echo "File: ${file}"
+            echo "Diff link: ${diff_link}"
           done < changes.txt
