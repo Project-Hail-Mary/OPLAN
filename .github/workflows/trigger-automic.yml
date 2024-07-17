@@ -1,11 +1,3 @@
-name: Trigger Automic Automation
-
-on: [push]
-
-jobs:
-  trigger-automic:
-    runs-on: ubuntu-latest
-    steps:
       - name: Checkout repository
         uses: actions/checkout@v3
         with:
@@ -13,36 +5,41 @@ jobs:
 
       - name: Print environment variables
         run: env
-
-      - name: Print working directory
-        run: pwd
-
-      - name: List files in the repo
-        run: ls -R
-
-      - name: Print contents of .git directory
-        run: ls -R .git
-
-      - name: Print git status
-        run: git status
-
+	@@ -29,14 +29,46 @@ jobs:
       - name: Print git log
         run: git log -n 5
 
       - name: Determine comparison commit
         id: determine-commit
         run: |
-          # Find the last commit with "Production" in its message
-          production_commit=$(git log --grep="Production" -1 --pretty=format:"%H")
+          # Get all commits for the specified file
+          commits=$(git log --pretty=format:"%H %s" -- .github/workflows/trigger-automic.yml)
           
-          # Fallback to the previous commit if no "Production" commit is found
-          if [ -z "$production_commit" ]; then
-            production_commit=${{ github.event.before }}
+          # Initialize variables
+          production_commit=""
+          last_commit=""
+          
+          # Iterate through all commits to find the desired commit
+          while IFS= read -r line; do
+            commit_sha=$(echo $line | awk '{print $1}')
+            commit_msg=$(echo $line | cut -d' ' -f2-)
+            
+            if [[ "$commit_msg" == *"Production"* ]]; then
+              production_commit=$commit_sha
+            fi
+            
+            last_commit=$commit_sha
+          done <<< "$commits"
+          
+          # Determine the comparison commit based on criteria
+          if [ -n "$production_commit" ]; then
+            comparison_commit=$production_commit
+          else
+            comparison_commit=$last_commit
           fi
           
-          echo "Comparison Commit SHA: $production_commit"
-          echo "::set-output name=comparison_commit::$production_commit"
-
+          echo "Comparison Commit SHA: $comparison_commit"
+          echo "::set-output name=comparison_commit::$comparison_commit"
       - name: Print diff links
         run: |
           echo "Comparison SHA: ${{ steps.determine-commit.outputs.comparison_commit }}"
@@ -50,23 +47,15 @@ jobs:
           git diff --name-only ${{ steps.determine-commit.outputs.comparison_commit }} ${{ github.sha }} > changes.txt
           cat changes.txt
           while IFS= read -r file; do
-            diff_link="https://github.com/${{ github.repository }}/compare/${{ steps.determine-commit.outputs.comparison_commit }}...${{ github.sha }}?diff=split&w=&short_path=$(echo ${file} | sed 's#/#%2F#g')"
+            diff_link="https://github.com/${{ github.repository }}/compare/${{ steps.determine-commit.outputs.comparison_commit }}...${{ github.sha }}#diff-$(echo ${file} | sed 's#/#%2F#g')"
             echo "File: ${file}"
             echo "Diff link: ${diff_link}"
           done < changes.txt
-
-      - name: Send webhook to Automic Automation
+	@@ -45,7 +77,7 @@ jobs:
         run: |
           while IFS= read -r file; do
             if [ "$file" != ".github/workflows/trigger-automic.yml" ]; then
-              diff_link="https://github.com/${{ github.repository }}/compare/${{ steps.determine-commit.outputs.comparison_commit }}...${{ github.sha }}?diff=split&w=&short_path=$(echo ${file} | sed 's#/#%2F#g')"
+              diff_link="https://github.com/${{ github.repository }}/compare/${{ steps.determine-commit.outputs.comparison_commit }}...${{ github.sha }}#diff-$(echo ${file} | sed 's#/#%2F#g')"
               curl --location 'http://104.196.70.116:8088/ae/api/v1/103/executions' \
                 --header 'Content-Type: application/json' \
                 --user '103/UDM/UDM:udm' \
-                --data "{\"object_name\": \"GITHUB.PRE.APPROVE\", \"inputs\": {\"&FILE#\": \"${file}\", \"&DIFF_LINK#\": \"${diff_link}\"}}"
-            else
-              echo "Skipping curl command for .github/workflows/trigger-automic.yml"
-            fi
-          done < changes.txt
-
-
