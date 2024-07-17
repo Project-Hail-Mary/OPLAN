@@ -1,9 +1,6 @@
 name: Trigger Automic Automation
 
-on:
-  push:
-    paths:
-      - '**/*.md'
+on: [push]
 
 jobs:
   trigger-automic:
