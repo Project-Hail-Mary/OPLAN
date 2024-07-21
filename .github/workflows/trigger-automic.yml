@@ -20,10 +20,10 @@ jobs:
           if git show-ref --tags | grep -q "refs/tags/PRODUCTION"; then
             production_commit=$(git rev-list -n 1 refs/tags/PRODUCTION)
             echo "Production Commit SHA: $production_commit"
-            echo "::set-output name=production_commit::$production_commit"
+            echo "production_commit=$production_commit" >> $GITHUB_ENV
           else
             echo "Production tag not found."
-            echo "::set-output name=production_commit::none"
+            echo "production_commit=none" >> $GITHUB_ENV
           fi
 
       - name: Get the latest commit SHA
@@ -31,12 +31,12 @@ jobs:
         run: |
           latest_commit=$(git rev-parse HEAD)
           echo "Latest Commit SHA: $latest_commit"
-          echo "::set-output name=latest_commit::$latest_commit"
+          echo "latest_commit=$latest_commit" >> $GITHUB_ENV
 
       - name: Compare commits
         run: |
-          production_commit=${{ steps.get-production-commit.outputs.production_commit }}
-          latest_commit=${{ steps.get-latest-commit.outputs.latest_commit }}
+          production_commit=${{ env.production_commit }}
+          latest_commit=${{ env.latest_commit }}
           
           if [ "$production_commit" != "none" ]; then
             echo "Comparing Production Commit ($production_commit) with Latest Commit ($latest_commit)"
