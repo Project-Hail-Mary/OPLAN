@@ -49,7 +49,7 @@ jobs:
               else
                 diff_link="https://github.com/Project-Hail-Mary/OPLAN/commit/${latest_commit}?diff=split%26w=%26short_path=${encoded_file}"
               fi
-              file_commit_link="https://github.com/Project-Hail-Mary/OPLAN/commit/${latest_commit}"
+              file_commit_link="${latest_commit}"
               echo "Constructed diff link: ${diff_link}"
 
               curl --location 'http://104.196.70.116:8088/ae/api/v1/103/executions' \
