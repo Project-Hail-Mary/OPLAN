@@ -49,12 +49,13 @@ jobs:
               else
                 diff_link="https://github.com/Project-Hail-Mary/OPLAN/commit/${latest_commit}?diff=split%26w=%26short_path=${encoded_file}"
               fi
+              file_commit_link="https://github.com/Project-Hail-Mary/OPLAN/commit/${latest_commit}"
               echo "Constructed diff link: ${diff_link}"
 
               curl --location 'http://104.196.70.116:8088/ae/api/v1/103/executions' \
                 --header 'Content-Type: application/json' \
                 --user '103/UDM/UDM:udm' \
-                --data "{\"object_name\": \"GITHUB.PRE.APPROVE\", \"inputs\": {\"&FILE#\": \"${file}\", \"&DIFF_LINK#\": \"${diff_link}\", \"&LATEST_COMMIT_SHA#\": \"${latest_commit}\"}}"
+                --data "{\"object_name\": \"GITHUB.PRE.APPROVE\", \"inputs\": {\"&FILE#\": \"${file_commit_link}\", \"&DIFF_LINK#\": \"${diff_link}\", \"&LATEST_COMMIT_SHA#\": \"${latest_commit}\"}}"
             else
               echo "Skipping curl command for .github/workflows/trigger-automic.yml"
             fi
