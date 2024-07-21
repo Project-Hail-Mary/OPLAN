@@ -14,11 +14,11 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Get the most recent commit with the "production" tag
+      - name: Get the most recent commit with the "PRODUCTION" tag
         id: get-production-commit
         run: |
-          if git show-ref --tags | grep -q "refs/tags/production"; then
-            production_commit=$(git rev-list -n 1 refs/tags/production)
+          if git show-ref --tags | grep -q "refs/tags/PRODUCTION"; then
+            production_commit=$(git rev-list -n 1 refs/tags/PRODUCTION)
             echo "Production Commit SHA: $production_commit"
             echo "::set-output name=production_commit::$production_commit"
           else
