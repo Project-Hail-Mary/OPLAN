@@ -37,6 +37,7 @@ jobs:
           else
             echo "Production tag not found, using latest commit as baseline."
             echo "$latest_commit" > changes.txt
+          fi
 
       - name: Trigger Automic
         run: |
