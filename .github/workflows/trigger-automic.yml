@@ -49,7 +49,7 @@ jobs:
               curl --location 'http://104.196.70.116:8088/ae/api/v1/103/executions' \
                 --header 'Content-Type: application/json' \
                 --user '103/UDM/UDM:udm' \
-                --data "{\"object_name\": \"GITHUB.PRE.APPROVE\", \"inputs\": {\"&FILE#\": \"${file}\", \"&DIFF_LINK#\": \"${diff_link}\"}}"
+                --data "{\"object_name\": \"GITHUB.PRE.APPROVE\", \"inputs\": {\"&FILE#\": \"${file}\", \"&DIFF_LINK#\": \"${diff_link}\", \"&LATEST_COMMIT_SHA#\": \"${latest_commit}\"}}"
             else
               echo "Skipping curl command for .github/workflows/trigger-automic.yml"
             fi
