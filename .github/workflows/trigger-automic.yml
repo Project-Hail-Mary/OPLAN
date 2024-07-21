@@ -17,9 +17,14 @@ jobs:
       - name: Get the most recent commit with the "production" tag
         id: get-production-commit
         run: |
-          production_commit=$(git rev-list -n 1 refs/tags/production)
-          echo "Production Commit SHA: $production_commit"
-          echo "::set-output name=production_commit::$production_commit"
+          if git show-ref --tags | grep -q "refs/tags/production"; then
+            production_commit=$(git rev-list -n 1 refs/tags/production)
+            echo "Production Commit SHA: $production_commit"
+            echo "::set-output name=production_commit::$production_commit"
+          else
+            echo "Production tag not found."
+            echo "::set-output name=production_commit::none"
+          fi
 
       - name: Get the latest commit SHA
         id: get-latest-commit
@@ -32,25 +37,30 @@ jobs:
         run: |
           production_commit=${{ steps.get-production-commit.outputs.production_commit }}
           latest_commit=${{ steps.get-latest-commit.outputs.latest_commit }}
-          echo "Comparing Production Commit ($production_commit) with Latest Commit ($latest_commit)"
           
-          # Create diff link
-          git diff --name-only $production_commit $latest_commit > changes.txt
-          cat changes.txt
+          if [ "$production_commit" != "none" ]; then
+            echo "Comparing Production Commit ($production_commit) with Latest Commit ($latest_commit)"
+            
+            # Create diff link
+            git diff --name-only $production_commit $latest_commit > changes.txt
+            cat changes.txt
 
-          while IFS= read -r file; do
-            if [ "$file" != ".github/workflows/trigger-automic.yml" ]; then
-              # Construct the comparison URL
-              encoded_file=$(echo ${file} | sed 's#/#%2F#g')
-              diff_link="https://github.com/Project-Hail-Mary/OPLAN/compare/${production_commit}...${latest_commit}?diff=split%26w=%26short_path=${encoded_file}"
-              
-              echo "Constructed diff link: ${diff_link}"  # Debug output for the URL
-              
-              curl --location 'http://104.196.70.116:8088/ae/api/v1/103/executions' \
-                --header 'Content-Type: application/json' \
-                --user '103/UDM/UDM:udm' \
-                --data "{\"object_name\": \"GITHUB.PRE.APPROVE\", \"inputs\": {\"&FILE#\": \"${file}\", \"&DIFF_LINK#\": \"${diff_link}\", \"&LATEST_COMMIT_SHA#\": \"${latest_commit}\"}}"
-            else
-              echo "Skipping curl command for .github/workflows/trigger-automic.yml"
-            fi
-          done < changes.txt
+            while IFS= read -r file; do
+              if [ "$file" != ".github/workflows/trigger-automic.yml" ]; then
+                # Construct the comparison URL
+                encoded_file=$(echo ${file} | sed 's#/#%2F#g')
+                diff_link="https://github.com/Project-Hail-Mary/OPLAN/compare/${production_commit}...${latest_commit}?diff=split%26w=%26short_path=${encoded_file}"
+                
+                echo "Constructed diff link: ${diff_link}"  # Debug output for the URL
+                
+                curl --location 'http://104.196.70.116:8088/ae/api/v1/103/executions' \
+                  --header 'Content-Type: application/json' \
+                  --user '103/UDM/UDM:udm' \
+                  --data "{\"object_name\": \"GITHUB.PRE.APPROVE\", \"inputs\": {\"&FILE#\": \"${file}\", \"&DIFF_LINK#\": \"${diff_link}\", \"&LATEST_COMMIT_SHA#\": \"${latest_commit}\"}}"
+              else
+                echo "Skipping curl command for .github/workflows/trigger-automic.yml"
+              fi
+            done < changes.txt
+          else
+            echo "Skipping comparison as production tag is not found."
+          fi
