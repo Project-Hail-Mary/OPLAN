@@ -1,66 +1,33 @@
-name: Compare with Production
+production_commit=$(git rev-list -n 1 refs/tags/PRODUCTION || echo "none")
+latest_commit=$(git rev-parse HEAD)
+echo "Latest Commit SHA: $latest_commit"
+echo "latest_commit=$latest_commit" >> $GITHUB_ENV
+echo "Production Commit SHA: $production_commit"
+echo "production_commit=$production_commit" >> $GITHUB_ENV
 
-on:
-  push:
-    branches:
-      - main
+if [ "$production_commit" != "none" ]; then
+  echo "Comparing Production Commit ($production_commit) with Latest Commit ($latest_commit)"
+  git diff --name-only $production_commit $latest_commit > changes.txt
+else
+  echo "Production tag not found, using latest commit as baseline."
+  echo "$latest_commit" > changes.txt
+fi
 
-jobs:
-  find-production-commit:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
+while IFS= read -r file; do
+  if [ "$file" != ".github/workflows/trigger-automic.yml" ]; then
+    encoded_file=$(echo ${file} | sed 's#/#%2F#g')
+    if [ "$production_commit" != "none" ]; then
+      diff_link="https://github.com/Project-Hail-Mary/OPLAN/compare/${production_commit}...${latest_commit}?diff=split%26w=%26short_path=${encoded_file}"
+    else
+      diff_link="https://github.com/Project-Hail-Mary/OPLAN/commit/${latest_commit}?diff=split%26w=%26short_path=${encoded_file}"
+    fi
+    echo "Constructed diff link: ${diff_link}"  # Debug output for the URL
 
-      - name: Get the most recent commit with the "PRODUCTION" tag
-        id: get-production-commit
-        run: |
-          if git show-ref --tags | grep -q "refs/tags/PRODUCTION"; then
-            production_commit=$(git rev-list -n 1 refs/tags/PRODUCTION)
-            echo "Production Commit SHA: $production_commit"
-            echo "production_commit=$production_commit" >> $GITHUB_ENV
-          else
-            echo "Production tag not found."
-            echo "production_commit=none" >> $GITHUB_ENV
-          fi
-
-      - name: Get the latest commit SHA
-        id: get-latest-commit
-        run: |
-          latest_commit=$(git rev-parse HEAD)
-          echo "Latest Commit SHA: $latest_commit"
-          echo "latest_commit=$latest_commit" >> $GITHUB_ENV
-
-      - name: Compare commits
-        run: |
-          production_commit=${{ env.production_commit }}
-          latest_commit=${{ env.latest_commit }}
-          
-          if [ "$production_commit" != "none" ]; then
-            echo "Comparing Production Commit ($production_commit) with Latest Commit ($latest_commit)"
-            
-            # Create diff link
-            git diff --name-only $production_commit $latest_commit > changes.txt
-            cat changes.txt
-
-            while IFS= read -r file; do
-              if [ "$file" != ".github/workflows/trigger-automic.yml" ]; then
-                # Construct the comparison URL
-                encoded_file=$(echo ${file} | sed 's#/#%2F#g')
-                diff_link="https://github.com/Project-Hail-Mary/OPLAN/compare/${production_commit}...${latest_commit}?diff=split%26w=%26short_path=${encoded_file}"
-                
-                echo "Constructed diff link: ${diff_link}"  # Debug output for the URL
-                
-                curl --location 'http://104.196.70.116:8088/ae/api/v1/103/executions' \
-                  --header 'Content-Type: application/json' \
-                  --user '103/UDM/UDM:udm' \
-                  --data "{\"object_name\": \"GITHUB.PRE.APPROVE\", \"inputs\": {\"&FILE#\": \"${file}\", \"&DIFF_LINK#\": \"${diff_link}\", \"&LATEST_COMMIT_SHA#\": \"${latest_commit}\"}}"
-              else
-                echo "Skipping curl command for .github/workflows/trigger-automic.yml"
-              fi
-            done < changes.txt
-          else
-            echo "Skipping comparison as production tag is not found."
-          fi
+    curl --location 'http://104.196.70.116:8088/ae/api/v1/103/executions' \
+      --header 'Content-Type: application/json' \
+      --user '103/UDM/UDM:udm' \
+      --data "{\"object_name\": \"GITHUB.PRE.APPROVE\", \"inputs\": {\"&FILE#\": \"${file}\", \"&DIFF_LINK#\": \"${diff_link}\", \"&LATEST_COMMIT_SHA#\": \"${latest_commit}\"}}"
+  else
+    echo "Skipping curl command for .github/workflows/trigger-automic.yml"
+  fi
+done < changes.txt
