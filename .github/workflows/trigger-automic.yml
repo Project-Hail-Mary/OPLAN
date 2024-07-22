@@ -41,7 +41,6 @@ jobs:
           else
             echo "No production commit found, using previous commit ($previous_commit) as baseline."
             git diff --name-only $previous_commit $latest_commit > changes.txt
-          fi
 
       - name: Trigger Automic
         run: |
