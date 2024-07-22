@@ -20,17 +20,27 @@ jobs:
           COMMITTED_FILE=$(git diff-tree --no-commit-id --name-only -r $LATEST_COMMIT_SHA)
           echo "LATEST_COMMIT_SHA=${LATEST_COMMIT_SHA}" >> $GITHUB_ENV
           echo "COMMITTED_FILE=${COMMITTED_FILE}" >> $GITHUB_ENV
+          echo "Committed file: $COMMITTED_FILE"
+        shell: bash
 
       - name: Find most recent "PRODUCTION" commit or fallback to previous commit
         id: get_baseline_commit
         run: |
+          set -e
           PRODUCTION_COMMIT=$(git log --grep="PRODUCTION" -n 1 --pretty=format:%H)
           if [ -z "$PRODUCTION_COMMIT" ]; then
-            BASELINE_COMMIT=$(git rev-parse HEAD^)
+            if [ $(git rev-list --count HEAD) -eq 1 ]; then
+              echo "Only one commit in the repository, no previous commit to compare to."
+              exit 1
+            else
+              BASELINE_COMMIT=$(git rev-parse HEAD^)
+            fi
           else
             BASELINE_COMMIT=$PRODUCTION_COMMIT
           fi
           echo "BASELINE_COMMIT=${BASELINE_COMMIT}" >> $GITHUB_ENV
+          echo "Baseline commit: $BASELINE_COMMIT"
+        shell: bash
 
       - name: Generate diff for the committed file
         id: generate_diff
@@ -38,6 +48,7 @@ jobs:
           DIFF=$(git diff $BASELINE_COMMIT $LATEST_COMMIT_SHA -- ${{ env.COMMITTED_FILE }})
           echo "DIFF=${DIFF}" >> $GITHUB_ENV
           echo "${DIFF}" > diff.txt
+        shell: bash
 
       - name: Create diff link (e.g., using a gist or another service)
         id: create_diff_link
@@ -45,6 +56,7 @@ jobs:
           # This is a placeholder command. Replace it with actual logic to upload the diff and get a link.
           DIFF_LINK="https://example.com/diff/${{ github.sha }}"  # Replace with actual diff hosting logic
           echo "DIFF_LINK=${DIFF_LINK}" >> $GITHUB_ENV
+        shell: bash
 
       - name: Notify Automic Automation
         run: |
@@ -52,3 +64,4 @@ jobs:
           --header 'Content-Type: application/json' \
           --user '103/UDM/UDM:udm' \
           --data "{\"object_name\": \"GITHUB.PRE.APPROVE\", \"inputs\": {\"&FILE#\": \"${{ env.COMMITTED_FILE }}\", \"&DIFF_LINK#\": \"${{ env.DIFF_LINK }}\", \"&LATEST_COMMIT_SHA#\": \"${{ env.LATEST_COMMIT_SHA }}\"}}"
+        shell: bash
