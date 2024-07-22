@@ -23,7 +23,6 @@ jobs:
       - name: Find relevant commits
         run: |
           set -e
-
           echo "Finding the most recent commit with 'PRODUCTION' in the message"
           production_commit=$(git log --grep='PRODUCTION' -n 1 --pretty=format:%H || echo "none")
           echo "Production Commit SHA: $production_commit"
@@ -41,7 +40,6 @@ jobs:
       - name: Determine base commit
         run: |
           set -e
-
           if [ "$production_commit" != "none" ]; then
             echo "Using Production Commit ($production_commit) as baseline"
             base_commit=$production_commit
@@ -60,14 +58,20 @@ jobs:
         run: |
           set -e
           updated_file=$(git diff-tree --no-commit-id --name-only -r $latest_commit)
-          echo "Updated file: $updated_file"
+          echo "Updated file(s): $updated_file"
           echo "updated_file=$updated_file" >> $GITHUB_ENV
+
+      - name: Log updated file
+        run: |
+          set -e
+          echo "Updated file from env: ${{ steps.updated_file.outputs.updated_file }}"
 
       - name: Trigger Automic
         run: |
           set -e
           updated_file=${{ steps.updated_file.outputs.updated_file }}
-          
+          echo "Updated file for processing: $updated_file"
+
           if [ -n "$updated_file" ]; then
             echo "Processing file: $updated_file"
 
