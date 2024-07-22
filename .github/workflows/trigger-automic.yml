@@ -36,14 +36,22 @@ jobs:
           echo "Production Commit SHA: $production_commit"
           echo "production_commit=$production_commit" >> $GITHUB_ENV
 
+      - name: Get modified file
+        id: get_modified_file
+        run: echo "::set-output name=file::$(jq -r '.head_commit.modified[0]' < $GITHUB_EVENT_PATH)"
+
       - name: Generate changes list
         run: |
+          modified_file=$(echo "${{ steps.get_modified_file.outputs.file }}" | sed 's#/#%2F#g')
+          echo "Modified file: $modified_file"
+          echo "modified_file=$modified_file" >> $GITHUB_ENV
+
           if [ "$production_commit" != "$latest_commit" ]; then
             echo "Comparing Production Commit ($production_commit) with Latest Commit ($latest_commit)"
-            git diff --name-only $production_commit $latest_commit > changes.txt
+            git diff $production_commit $latest_commit -- $modified_file > changes.txt
           else
             echo "Only one commit in the repository, comparing it to itself."
-            echo "$latest_commit" > changes.txt
+            git diff $latest_commit $latest_commit -- $modified_file > changes.txt
           fi
 
       - name: Trigger Automic
