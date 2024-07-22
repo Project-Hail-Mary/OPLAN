@@ -1,99 +1,62 @@
-name: Create Diff and Notify Automic
+name: Trigger Automic
 
 on:
   push:
     branches:
-      - main  # Adjust if you want this to run on different branches
+      - main
 
 jobs:
-  create-diff-and-notify:
+  find-production-commit:
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
 
-      - name: Get latest commit SHA and committed file
-        id: get_commit_info
+      - name: Set up Git
         run: |
-          echo "Running on $(uname -a)"
-          echo "Current directory: $(pwd)"
-          echo "Listing files in the workspace:"
-          ls -al
-          
-          echo "Fetching latest commit SHA..."
-          LATEST_COMMIT_SHA=$(git rev-parse HEAD)
-          echo "Latest commit SHA: $LATEST_COMMIT_SHA"
-          
-          echo "Fetching committed files..."
-          COMMITTED_FILES=$(git diff-tree --no-commit-id --name-only -r $LATEST_COMMIT_SHA)
-          echo "Committed files: $COMMITTED_FILES"
-          
-          echo "LATEST_COMMIT_SHA=${LATEST_COMMIT_SHA}" >> $GITHUB_ENV
-          echo "COMMITTED_FILES=${COMMITTED_FILES}" >> $GITHUB_ENV
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
 
-      - name: Find most recent "PRODUCTION" commit or fallback to previous commit
-        id: get_baseline_commit
+      - name: Find production commit
         run: |
-          set -e
-          echo "LATEST_COMMIT_SHA: $LATEST_COMMIT_SHA"
-          echo "Committed files: $COMMITTED_FILES"
+          production_commit=$(git rev-list -n 1 refs/tags/PRODUCTION || echo "none")
+          latest_commit=$(git rev-parse HEAD)
+          echo "Latest Commit SHA: $latest_commit"
+          echo "latest_commit=$latest_commit" >> $GITHUB_ENV
+          echo "Production Commit SHA: $production_commit"
+          echo "production_commit=$production_commit" >> $GITHUB_ENV
 
-          echo "Finding most recent 'PRODUCTION' commit..."
-          PRODUCTION_COMMIT=$(git log --grep="PRODUCTION" -n 1 --pretty=format:%H)
-          echo "PRODUCTION_COMMIT: $PRODUCTION_COMMIT"
-
-          if [ -z "$PRODUCTION_COMMIT" ]; then
-            echo "'PRODUCTION' commit not found."
-            if [ $(git rev-list --count HEAD) -eq 1 ]; then
-              echo "Only one commit in the repository, no previous commit to compare to."
-              exit 1
-            else
-              BASELINE_COMMIT=$(git rev-parse HEAD^)
-              echo "Using previous commit as baseline: $BASELINE_COMMIT"
-            fi
+      - name: Generate changes list
+        run: |
+          if [ "$production_commit" != "none" ]; then
+            echo "Comparing Production Commit ($production_commit) with Latest Commit ($latest_commit)"
+            git diff --name-only $production_commit $latest_commit > changes.txt
           else
-            BASELINE_COMMIT=$PRODUCTION_COMMIT
-            echo "Using 'PRODUCTION' commit as baseline: $BASELINE_COMMIT"
+            echo "Production tag not found, using latest commit as baseline."
+            echo "$latest_commit" > changes.txt
           fi
 
-          echo "BASELINE_COMMIT=${BASELINE_COMMIT}" >> $GITHUB_ENV
-          echo "Baseline commit: $BASELINE_COMMIT"
-
-      - name: Generate diff for the committed file
-        id: generate_diff
+      - name: Trigger Automic
         run: |
-          for FILE in ${{ env.COMMITTED_FILES }}; do
-            echo "Generating diff for file: $FILE"
-            DIFF=$(git diff $BASELINE_COMMIT $LATEST_COMMIT_SHA -- $FILE)
-            echo "Diff for $FILE:"
-            echo "$DIFF"
-            echo "DIFF_${FILE}=${DIFF}" >> $GITHUB_ENV
-          done
+          while IFS= read -r file; do
+            if [ "$file" != ".github/workflows/trigger-automic.yml" ]; then
+              encoded_file=$(echo ${file} | sed 's#/#%2F#g')
+              if [ "$production_commit" != "none" ]; then
+                diff_link="https://github.com/Project-Hail-Mary/OPLAN/compare/${production_commit}...${latest_commit}?diff=split%26w=%26short_path=${encoded_file}"
+              else
+                diff_link="https://github.com/Project-Hail-Mary/OPLAN/commit/${latest_commit}?diff=split%26w=%26short_path=${encoded_file}"
+              fi
+              file_commit_link="${latest_commit}"
+              echo "Constructed diff link: ${diff_link}"
 
-      - name: Create diff link (e.g., using a gist or another service)
-        id: create_diff_link
-        run: |
-          echo "Creating diff link..."
-          DIFF_LINK="https://example.com/diff/${{ github.sha }}"  # Replace with actual diff hosting logic
-          echo "Diff link: $DIFF_LINK"
-          echo "DIFF_LINK=${DIFF_LINK}" >> $GITHUB_ENV
-
-      - name: Notify Automic Automation
-        run: |
-          echo "Notifying Automic Automation with the following data:"
-          echo "Files: ${{ env.COMMITTED_FILES }}"
-          echo "Diff link: ${{ env.DIFF_LINK }}"
-          echo "Latest commit SHA: ${{ env.LATEST_COMMIT_SHA }}"
-
-          for FILE in ${{ env.COMMITTED_FILES }}; do
-            DIFF_ENV_VAR="DIFF_${FILE}"
-            DIFF_CONTENT=${!DIFF_ENV_VAR}
-            echo "File: $FILE"
-            echo "Diff content: $DIFF_CONTENT"
-
-            curl --location 'http://104.196.70.116:8088/ae/api/v1/103/executions' \
-            --header 'Content-Type: application/json' \
-            --user '103/UDM/UDM:udm' \
-            --data "{\"object_name\": \"GITHUB.PRE.APPROVE\", \"inputs\": {\"&FILE#\": \"$FILE\", \"&DIFF_LINK#\": \"${{ env.DIFF_LINK }}\", \"&LATEST_COMMIT_SHA#\": \"${{ env.LATEST_COMMIT_SHA }}\"}}"
-          done
+              curl --location 'http://104.196.70.116:8088/ae/api/v1/103/executions' \
+                --header 'Content-Type: application/json' \
+                --user '103/UDM/UDM:udm' \
+                --data "{\"object_name\": \"GITHUB.PRE.APPROVE\", \"inputs\": {\"&FILE#\": \"${file_commit_link}\", \"&DIFF_LINK#\": \"${diff_link}\", \"&LATEST_COMMIT_SHA#\": \"${latest_commit}\"}}"
+            else
+              echo "Skipping curl command for .github/workflows/trigger-automic.yml"
+            fi
+          done < changes.txt
