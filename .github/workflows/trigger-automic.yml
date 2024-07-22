@@ -22,7 +22,8 @@ jobs:
 
       - name: Find production commit
         run: |
-          production_commit=$(git rev-list -n 1 refs/tags/PRODUCTION || echo "none")
+          # CHANGED: Find the most recent commit with "PRODUCTION" in the commit message
+          production_commit=$(git log --grep="PRODUCTION" -n 1 --format="%H" || echo "none")
           latest_commit=$(git rev-parse HEAD)
           echo "Latest Commit SHA: $latest_commit"
           echo "latest_commit=$latest_commit" >> $GITHUB_ENV
@@ -35,7 +36,7 @@ jobs:
             echo "Comparing Production Commit ($production_commit) with Latest Commit ($latest_commit)"
             git diff --name-only $production_commit $latest_commit > changes.txt
           else
-            echo "Production tag not found, using latest commit as baseline."
+            echo "Production commit not found, using latest commit as baseline."
             echo "$latest_commit" > changes.txt
           fi
 
@@ -49,7 +50,7 @@ jobs:
               else
                 diff_link="https://github.com/Project-Hail-Mary/OPLAN/commit/${latest_commit}?diff=split%26w=%26short_path=${encoded_file}"
               fi
-              file_commit_link="${latest_commit}"
+              file_commit_link="https://github.com/Project-Hail-Mary/OPLAN/commit/${latest_commit}"
               echo "Constructed diff link: ${diff_link}"
 
               curl --location 'http://104.196.70.116:8088/ae/api/v1/103/executions' \
