@@ -5,12 +5,12 @@ on: [push]
 jobs:
   find-production-commit:
     runs-on: ubuntu-latest
+
     steps:
     - name: Checkout Repository
       uses: actions/checkout@v3
       with:
         fetch-depth: 0
-        repository: Project-Hail-Mary/OPLAN
 
     - name: Set up Git
       run: |
@@ -23,50 +23,48 @@ jobs:
         latest_commit=$(git rev-parse HEAD)
         previous_commit=$(git rev-parse HEAD~1)
         echo "Latest Commit SHA: $latest_commit"
-        echo "latest_commit=$latest_commit" >> $GITHUB_ENV
         echo "Previous Commit SHA: $previous_commit"
-        echo "previous_commit=$previous_commit" >> $GITHUB_ENV
         echo "Production Commit SHA: $production_commit"
         echo "production_commit=$production_commit" >> $GITHUB_ENV
+        echo "latest_commit=$latest_commit" >> $GITHUB_ENV
+        echo "previous_commit=$previous_commit" >> $GITHUB_ENV
 
-        if [ "$production_commit" != "none" ]; then
-          echo "Comparing Production Commit ($production_commit) with Latest Commit ($latest_commit)"
-          git diff --name-only $production_commit $latest_commit > changes.txt
-        else
-          echo "No production commit found, using previous commit ($previous_commit) as baseline."
-          git diff --name-only $previous_commit $latest_commit > changes.txt
-        fi
-
-    - name: Filter for Committed File
+    - name: Get Committed File
       run: |
         committed_file=$(git diff --name-only HEAD~1 HEAD)
         echo "Committed file: $committed_file"
-        if grep -q "$committed_file" changes.txt; then
-          echo "$committed_file" > changes.txt
-        else
-          echo "Committed file not found in changes, nothing to process."
-          exit 0
-        fi
+        echo "committed_file=$committed_file" >> $GITHUB_ENV
 
-    - name: Generate Diff Links
+    - name: Generate Diff for Committed File
       run: |
-        latest_commit=$(git rev-parse HEAD)
-        diff_link="https://github.com/Project-Hail-Mary/OPLAN/compare/${previous_commit}...${latest_commit}"
-        file_commit_link="https://github.com/Project-Hail-Mary/OPLAN/commit/${latest_commit}"
-        echo "diff_link=$diff_link" >> $GITHUB_ENV
-        echo "file_commit_link=$file_commit_link" >> $GITHUB_ENV
+        production_commit=${{ env.production_commit }}
+        latest_commit=${{ env.latest_commit }}
+        previous_commit=${{ env.previous_commit }}
+        committed_file=${{ env.committed_file }}
+        
+        if [ "$production_commit" != "none" ]; then
+          echo "Using Production Commit as baseline."
+          git diff $production_commit $latest_commit -- $committed_file > changes.txt
+        else
+          echo "Using Previous Commit as baseline."
+          git diff $previous_commit $latest_commit -- $committed_file > changes.txt
+        fi
 
     - name: Call Automic
       run: |
-        changes=$(cat changes.txt)
+        latest_commit=${{ env.latest_commit }}
+        committed_file=${{ env.committed_file }}
+        diff_link="https://github.com/Project-Hail-Mary/OPLAN/commit/${latest_commit}"
+        file_commit_link="https://github.com/Project-Hail-Mary/OPLAN/commit/${latest_commit}"
+        
         payload=$(jq -n \
           --arg latest_commit "$latest_commit" \
           --arg previous_commit "$previous_commit" \
           --arg production_commit "$production_commit" \
-          --arg changes "$changes" \
+          --arg changes "$(cat changes.txt)" \
           '{latest_commit: $latest_commit, previous_commit: $previous_commit, production_commit: $production_commit, changes: $changes}')
 
         curl --location 'http://104.196.70.116:8088/ae/api/v1/103/executions' \
-                --header 'Content-Type: application/json' \
-                --user '103/UDM/UDM:udm' \
-                --data "{\"object_name\": \"GITHUB.PRE.APPROVE\", \"inputs\": {\"&FILE#\": \"${file_commit_link}\", \"&DIFF_LINK#\": \"${diff_link}\", \"&LATEST_COMMIT_SHA#\": \"${latest_commit}\"}}"
+          --header 'Content-Type: application/json' \
+          --user '103/UDM/UDM:udm' \
+          --data "{\"object_name\": \"GITHUB.PRE.APPROVE\", \"inputs\": {\"&FILE#\": \"${file_commit_link}\", \"&DIFF_LINK#\": \"${diff_link}\", \"&LATEST_COMMIT_SHA#\": \"${latest_commit}\"}}"
