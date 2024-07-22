@@ -20,85 +20,43 @@ jobs:
           git config --global user.name 'github-actions[bot]'
           git config --global user.email 'github-actions[bot]@users.noreply.github.com'
 
-      - name: Find relevant commits
+      - name: Find production commit
         run: |
-          set -e
-          echo "Finding the most recent commit with 'PRODUCTION' in the message"
-          production_commit=$(git log --grep='PRODUCTION' -n 1 --pretty=format:%H || echo "none")
-          echo "Production Commit SHA: $production_commit"
-          echo "production_commit=$production_commit" >> $GITHUB_ENV
-
-          echo "Finding the most recent commit before the current commit"
-          previous_commit=$(git rev-list HEAD^1 -n 1 || echo "none")
-          echo "Previous Commit SHA: $previous_commit"
-          echo "previous_commit=$previous_commit" >> $GITHUB_ENV
-
+          production_commit=$(git rev-list -n 1 refs/tags/PRODUCTION || echo "none")
           latest_commit=$(git rev-parse HEAD)
           echo "Latest Commit SHA: $latest_commit"
           echo "latest_commit=$latest_commit" >> $GITHUB_ENV
+          echo "Production Commit SHA: $production_commit"
+          echo "production_commit=$production_commit" >> $GITHUB_ENV
 
-      - name: Determine base commit
+      - name: Generate changes list
         run: |
-          set -e
           if [ "$production_commit" != "none" ]; then
-            echo "Using Production Commit ($production_commit) as baseline"
-            base_commit=$production_commit
-          elif [ "$previous_commit" != "none" ]; then
-            echo "Using Previous Commit ($previous_commit) as baseline"
-            base_commit=$previous_commit
+            echo "Comparing Production Commit ($production_commit) with Latest Commit ($latest_commit)"
+            git diff --name-only $production_commit $latest_commit > changes.txt
           else
-            echo "Using latest commit ($latest_commit) as baseline"
-            base_commit=$latest_commit
+            echo "Production tag not found, using latest commit as baseline."
+            echo "$latest_commit" > changes.txt
           fi
-          echo "Base Commit SHA: $base_commit"
-          echo "base_commit=$base_commit" >> $GITHUB_ENV
-
-      - name: Identify the updated file
-        id: identify_updated_file
-        run: |
-          set -e
-          updated_file=$(git diff-tree --no-commit-id --name-only -r $latest_commit)
-          echo "Updated file(s): $updated_file"
-          echo "::set-output name=updated_file::$updated_file"
-
-      - name: Log updated file
-        run: |
-          set -e
-          echo "Updated file from env: ${{ steps.identify_updated_file.outputs.updated_file }}"
 
       - name: Trigger Automic
         run: |
-          set -e
-          updated_file="${{ steps.identify_updated_file.outputs.updated_file }}"
-          echo "Updated file for processing: $updated_file"
-
-          if [ -n "$updated_file" ]; then
-            echo "Processing file: $updated_file"
-
-            if [ "$updated_file" != ".github/workflows/trigger-automic.yml" ]; then
-              encoded_file=$(echo ${updated_file} | sed 's#/#%2F#g')
-              if [ "$base_commit" != "$latest_commit" ]; then
-                diff_link="https://github.com/Project-Hail-Mary/OPLAN/compare/${base_commit}...${latest_commit}?diff=split&file=${encoded_file}"
-                file_diff=$(git diff ${base_commit} ${latest_commit} -- ${updated_file} | base64)
+          while IFS= read -r file; do
+            if [ "$file" != ".github/workflows/trigger-automic.yml" ]; then
+              encoded_file=$(echo ${file} | sed 's#/#%2F#g')
+              if [ "$production_commit" != "none" ]; then
+                diff_link="https://github.com/Project-Hail-Mary/OPLAN/compare/${production_commit}...${latest_commit}?diff=split%26w=%26short_path=${encoded_file}"
               else
-                diff_link="https://github.com/Project-Hail-Mary/OPLAN/commit/${latest_commit}?diff=split&file=${encoded_file}"
-                file_diff=$(git show ${latest_commit} -- ${updated_file} | base64)
+                diff_link="https://github.com/Project-Hail-Mary/OPLAN/commit/${latest_commit}?diff=split%26w=%26short_path=${encoded_file}"
               fi
               file_commit_link="${latest_commit}"
               echo "Constructed diff link: ${diff_link}"
-              echo "File Commit Link: ${file_commit_link}"
 
               curl --location 'http://104.196.70.116:8088/ae/api/v1/103/executions' \
                 --header 'Content-Type: application/json' \
                 --user '103/UDM/UDM:udm' \
-                --data "{\"object_name\": \"GITHUB.PRE.APPROVE\", \"inputs\": {\"&file#\": \"${file_commit_link}\", \"&diff_link#\": \"${diff_link}\", \"&latest_commit_sha#\": \"${latest_commit}\", \"&diff#\": \"${file_diff}\"}}"
+                --data "{\"object_name\": \"GITHUB.PRE.APPROVE\", \"inputs\": {\"&FILE#\": \"${file_commit_link}\", \"&DIFF_LINK#\": \"${diff_link}\", \"&LATEST_COMMIT_SHA#\": \"${latest_commit}\"}}"
             else
               echo "Skipping curl command for .github/workflows/trigger-automic.yml"
             fi
-          else
-            echo "No updated file detected."
-          fi
-
-      - name: Log Completion
-        run: |
-          echo "Script execution completed."
+          done < changes.txt
