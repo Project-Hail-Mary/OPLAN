@@ -38,14 +38,17 @@ jobs:
 
       - name: Get modified file
         id: get_modified_file
-        run: echo "::set-output name=file::$(jq -r '.head_commit.modified[0]' < $GITHUB_EVENT_PATH)"
+        run: |
+          modified_file=$(jq -r '.head_commit.modified[0]' < $GITHUB_EVENT_PATH)
+          echo "modified_file=$modified_file" >> $GITHUB_ENV
 
       - name: Generate changes list
         run: |
-          modified_file=$(echo "${{ steps.get_modified_file.outputs.file }}" | sed 's#/#%2F#g')
-          echo "Modified file: $modified_file"
-          echo "modified_file=$modified_file" >> $GITHUB_ENV
-
+          if [ -z "$modified_file" ] || [ "$modified_file" == "null" ]; then
+            echo "No modified files detected, skipping diff generation."
+            exit 0
+          fi
+          
           if [ "$production_commit" != "$latest_commit" ]; then
             echo "Comparing Production Commit ($production_commit) with Latest Commit ($latest_commit)"
             git diff $production_commit $latest_commit -- $modified_file > changes.txt
