@@ -13,7 +13,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      - name: Get latest commit message and file
+      - name: Get latest commit SHA and committed file
         id: get_commit_info
         run: |
           LATEST_COMMIT_SHA=$(git rev-parse HEAD)
@@ -21,22 +21,29 @@ jobs:
           echo "LATEST_COMMIT_SHA=${LATEST_COMMIT_SHA}" >> $GITHUB_ENV
           echo "COMMITTED_FILE=${COMMITTED_FILE}" >> $GITHUB_ENV
 
-      - name: Get baseline commit
+      - name: Find most recent "PRODUCTION" commit or fallback to previous commit
         id: get_baseline_commit
         run: |
-          BASELINE_COMMIT=$(git log --grep="PRODUCTION" -n 1 --pretty=format:%H || git rev-parse HEAD^)
+          PRODUCTION_COMMIT=$(git log --grep="PRODUCTION" -n 1 --pretty=format:%H)
+          if [ -z "$PRODUCTION_COMMIT" ]; then
+            BASELINE_COMMIT=$(git rev-parse HEAD^)
+          else
+            BASELINE_COMMIT=$PRODUCTION_COMMIT
+          fi
           echo "BASELINE_COMMIT=${BASELINE_COMMIT}" >> $GITHUB_ENV
 
-      - name: Generate diff
+      - name: Generate diff for the committed file
         id: generate_diff
         run: |
           DIFF=$(git diff $BASELINE_COMMIT $LATEST_COMMIT_SHA -- ${{ env.COMMITTED_FILE }})
           echo "DIFF=${DIFF}" >> $GITHUB_ENV
+          echo "${DIFF}" > diff.txt
 
       - name: Create diff link (e.g., using a gist or another service)
         id: create_diff_link
         run: |
-          DIFF_LINK="https://example.com/diff/${{ github.sha }}" # Replace this with actual logic to host the diff
+          # This is a placeholder command. Replace it with actual logic to upload the diff and get a link.
+          DIFF_LINK="https://example.com/diff/${{ github.sha }}"  # Replace with actual diff hosting logic
           echo "DIFF_LINK=${DIFF_LINK}" >> $GITHUB_ENV
 
       - name: Notify Automic Automation
