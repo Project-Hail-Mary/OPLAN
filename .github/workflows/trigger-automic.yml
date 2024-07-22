@@ -47,11 +47,13 @@ jobs:
         
         if [ "$production_commit" != "none" ]; then
           echo "Using Production Commit as baseline."
-          diff_link="https://github.com/Project-Hail-Mary/OPLAN/commit/$latest_commit?diff=split&w=1&short_path=$committed_file"
+          baseline_commit=$production_commit
         else
           echo "Using Previous Commit as baseline."
-          diff_link="https://github.com/Project-Hail-Mary/OPLAN/commit/$latest_commit?diff=split&w=1&short_path=$committed_file"
+          baseline_commit=$previous_commit
         fi
+        
+        diff_link="https://github.com/Project-Hail-Mary/OPLAN/commit/$latest_commit?diff=split&w=1&short_path=$committed_file"
         
         echo "::set-output name=diff_link::$diff_link"
 
