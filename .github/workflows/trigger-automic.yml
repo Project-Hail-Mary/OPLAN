@@ -21,67 +21,49 @@ jobs:
           git config --global user.email 'github-actions[bot]@users.noreply.github.com'
 
       - name: Find production commit
-        id: find_commit
         run: |
-          production_commit=$(git log --grep=PRODUCTION -1 --format=format:%H || echo "none")
+          # Search for the most recent commit with a message containing 'PRODUCTION'
+          production_commit=$(git log --grep='PRODUCTION' -1 --format='%H' || echo "none")
           latest_commit=$(git rev-parse HEAD)
-          previous_commit=$(git rev-parse HEAD^)
-          echo "Latest Commit SHA: $latest_commit"
-          echo "Production Commit SHA: $production_commit"
-          echo "Previous Commit SHA: $previous_commit"
-          echo "::set-output name=latest_commit::$latest_commit"
-          echo "::set-output name=production_commit::$production_commit"
-          echo "::set-output name=previous_commit::$previous_commit"
-
-      - name: Determine comparison commit
-        id: determine_commit
-        run: |
-          if [ "${{ steps.find_commit.outputs.production_commit }}" != "none" ]; then
-            comparison_commit=${{ steps.find_commit.outputs.production_commit }}
-          else
-            if [ "${{ steps.find_commit.outputs.latest_commit }}" != "${{ steps.find_commit.outputs.previous_commit }}" ]; then
-              comparison_commit=${{ steps.find_commit.outputs.previous_commit }}
-            else
-              comparison_commit=${{ steps.find_commit.outputs.latest_commit }}
-            fi
+          
+          if [ "$production_commit" == "none" ]; then
+            # If no 'PRODUCTION' commit is found, use the latest commit
+            production_commit=$latest_commit
           fi
-          echo "Comparison Commit SHA: $comparison_commit"
-          echo "::set-output name=comparison_commit::$comparison_commit"
+
+          echo "Latest Commit SHA: $latest_commit"
+          echo "latest_commit=$latest_commit" >> $GITHUB_ENV
+          echo "Production Commit SHA: $production_commit"
+          echo "production_commit=$production_commit" >> $GITHUB_ENV
 
       - name: Generate changes list
-        id: generate_changes
         run: |
-          comparison_commit=${{ steps.determine_commit.outputs.comparison_commit }}
-          latest_commit=${{ steps.find_commit.outputs.latest_commit }}
-          echo "Comparing $comparison_commit with $latest_commit"
-          git diff --name-only $comparison_commit $latest_commit > changes.txt
-          cat changes.txt
-
-      - name: Generate specific diff file
-        run: |
-          file=$(cat changes.txt | head -n 1)
-          if [ "$file" != ".github/workflows/trigger-automic.yml" ]; then
-            git diff ${{ steps.determine_commit.outputs.comparison_commit }} ${{ steps.find_commit.outputs.latest_commit }} -- $file > specific_diff.txt
+          if [ "$production_commit" != "$latest_commit" ]; then
+            echo "Comparing Production Commit ($production_commit) with Latest Commit ($latest_commit)"
+            git diff --name-only $production_commit $latest_commit > changes.txt
+          else
+            echo "Only one commit in the repository, comparing it to itself."
+            echo "$latest_commit" > changes.txt
           fi
-          cat specific_diff.txt
 
       - name: Trigger Automic
         run: |
-          file=$(cat changes.txt | head -n 1)
-          if [ "$file" != ".github/workflows/trigger-automic.yml" ]; then
-            encoded_file=$(echo ${file} | sed 's#/#%2F#g')
-            diff_link="https://github.com/Project-Hail-Mary/OPLAN/compare/${{ steps.determine_commit.outputs.comparison_commit }}...${{ steps.find_commit.outputs.latest_commit }}"
-            file_commit_link="${{ steps.find_commit.outputs.latest_commit }}"
-            echo "Constructed diff link: ${diff_link}"
+          while IFS= read -r file; do
+            if [ "$file" != ".github/workflows/trigger-automic.yml" ]; then
+              encoded_file=$(echo ${file} | sed 's#/#%2F#g')
+              if [ "$production_commit" != "$latest_commit" ]; then
+                diff_link="https://github.com/Project-Hail-Mary/OPLAN/compare/${production_commit}...${latest_commit}?diff=split%26w=%26short_path=${encoded_file}"
+              else
+                diff_link="https://github.com/Project-Hail-Mary/OPLAN/commit/${latest_commit}?diff=split%26w=%26short_path=${encoded_file}"
+              fi
+              file_commit_link="${latest_commit}"
+              echo "Constructed diff link: ${diff_link}"
 
-            specific_diff=$(cat specific_diff.txt)
-            echo "Specific diff for $file:"
-            echo "$specific_diff"
-
-            curl --location 'http://104.196.70.116:8088/ae/api/v1/103/executions' \
-              --header 'Content-Type: application/json' \
-              --user '103/UDM/UDM:udm' \
-              --data "{\"object_name\": \"GITHUB.PRE.APPROVE\", \"inputs\": {\"&FILE#\": \"${file_commit_link}\", \"&DIFF_LINK#\": \"${diff_link}\", \"&LATEST_COMMIT_SHA#\": \"${{ steps.find_commit.outputs.latest_commit }}\", \"&DIFF_CONTENT#\": \"${specific_diff}\"}}"
-          else
-            echo "Skipping curl command for .github/workflows/trigger-automic.yml"
-          fi
+              curl --location 'http://104.196.70.116:8088/ae/api/v1/103/executions' \
+                --header 'Content-Type: application/json' \
+                --user '103/UDM/UDM:udm' \
+                --data "{\"object_name\": \"GITHUB.PRE.APPROVE\", \"inputs\": {\"&FILE#\": \"${file_commit_link}\", \"&DIFF_LINK#\": \"${diff_link}\", \"&LATEST_COMMIT_SHA#\": \"${latest_commit}\"}}"
+            else
+              echo "Skipping curl command for .github/workflows/trigger-automic.yml"
+            fi
+          done < changes.txt
