@@ -16,28 +16,49 @@ jobs:
       - name: Get latest commit SHA and committed file
         id: get_commit_info
         run: |
+          echo "Running on $(uname -a)"
+          echo "Current directory: $(pwd)"
+          echo "Listing files in the workspace:"
+          ls -al
+          
+          echo "Fetching latest commit SHA..."
           LATEST_COMMIT_SHA=$(git rev-parse HEAD)
+          echo "Latest commit SHA: $LATEST_COMMIT_SHA"
+          
+          echo "Fetching committed file..."
           COMMITTED_FILE=$(git diff-tree --no-commit-id --name-only -r $LATEST_COMMIT_SHA)
+          echo "Committed file: $COMMITTED_FILE"
+          
           echo "LATEST_COMMIT_SHA=${LATEST_COMMIT_SHA}" >> $GITHUB_ENV
           echo "COMMITTED_FILE=${COMMITTED_FILE}" >> $GITHUB_ENV
-          echo "Committed file: $COMMITTED_FILE"
         shell: bash
 
       - name: Find most recent "PRODUCTION" commit or fallback to previous commit
         id: get_baseline_commit
         run: |
           set -e
+          echo "Fetching latest commit SHA..."
+          echo "LATEST_COMMIT_SHA: $LATEST_COMMIT_SHA"
+          echo "Committed file: $COMMITTED_FILE"
+
+          echo "Finding most recent 'PRODUCTION' commit..."
           PRODUCTION_COMMIT=$(git log --grep="PRODUCTION" -n 1 --pretty=format:%H)
+          echo "PRODUCTION_COMMIT: $PRODUCTION_COMMIT"
+
           if [ -z "$PRODUCTION_COMMIT" ]; then
+            echo "'PRODUCTION' commit not found."
             if [ $(git rev-list --count HEAD) -eq 1 ]; then
               echo "Only one commit in the repository, no previous commit to compare to."
               exit 1
             else
               BASELINE_COMMIT=$(git rev-parse HEAD^)
+              echo "Using previous commit as baseline: $BASELINE_COMMIT"
             fi
           else
             BASELINE_COMMIT=$PRODUCTION_COMMIT
+            echo "Using 'PRODUCTION' commit as baseline: $BASELINE_COMMIT"
           fi
+
           echo "BASELINE_COMMIT=${BASELINE_COMMIT}" >> $GITHUB_ENV
           echo "Baseline commit: $BASELINE_COMMIT"
         shell: bash
@@ -45,21 +66,31 @@ jobs:
       - name: Generate diff for the committed file
         id: generate_diff
         run: |
+          echo "Generating diff between $BASELINE_COMMIT and $LATEST_COMMIT_SHA for file $COMMITTED_FILE..."
           DIFF=$(git diff $BASELINE_COMMIT $LATEST_COMMIT_SHA -- ${{ env.COMMITTED_FILE }})
           echo "DIFF=${DIFF}" >> $GITHUB_ENV
           echo "${DIFF}" > diff.txt
+          echo "Diff content:"
+          cat diff.txt
         shell: bash
 
       - name: Create diff link (e.g., using a gist or another service)
         id: create_diff_link
         run: |
           # This is a placeholder command. Replace it with actual logic to upload the diff and get a link.
+          echo "Creating diff link..."
           DIFF_LINK="https://example.com/diff/${{ github.sha }}"  # Replace with actual diff hosting logic
+          echo "Diff link: $DIFF_LINK"
           echo "DIFF_LINK=${DIFF_LINK}" >> $GITHUB_ENV
         shell: bash
 
       - name: Notify Automic Automation
         run: |
+          echo "Notifying Automic Automation with the following data:"
+          echo "File: ${{ env.COMMITTED_FILE }}"
+          echo "Diff link: ${{ env.DIFF_LINK }}"
+          echo "Latest commit SHA: ${{ env.LATEST_COMMIT_SHA }}"
+
           curl --location 'http://104.196.70.116:8088/ae/api/v1/103/executions' \
           --header 'Content-Type: application/json' \
           --user '103/UDM/UDM:udm' \
