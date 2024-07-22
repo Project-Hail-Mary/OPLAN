@@ -35,3 +35,17 @@ jobs:
           echo "No production commit found, using previous commit ($previous_commit) as baseline."
           git diff --name-only $previous_commit $latest_commit > changes.txt
         fi
+
+    - name: Call Automic
+      run: |
+        changes=$(cat changes.txt)
+        payload=$(jq -n \
+          --arg latest_commit "$latest_commit" \
+          --arg previous_commit "$previous_commit" \
+          --arg production_commit "$production_commit" \
+          --arg changes "$changes" \
+          '{latest_commit: $latest_commit, previous_commit: $previous_commit, production_commit: $production_commit, changes: $changes}')
+        
+        curl -X POST https://automic-api-url/endpoint \
+          -H "Content-Type: application/json" \
+          -d "$payload"
