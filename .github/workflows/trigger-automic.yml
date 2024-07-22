@@ -1,65 +1,37 @@
-name: Trigger Automic
+name: Find Production Commit
 
-on:
-  push:
-    branches:
-      - main
+on: [push]
 
 jobs:
   find-production-commit:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
+    - name: Checkout Repository
+      uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
 
-      - name: Set up Git
-        run: |
-          git config --global user.name 'github-actions[bot]'
-          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+    - name: Set up Git
+      run: |
+        git config --global user.name 'github-actions[bot]'
+        git config --global user.email 'github-actions[bot]@users.noreply.github.com'
 
-      - name: Find production commit
-        run: |
-          # Find the most recent commit with "PRODUCTION" in the commit message
-          production_commit=$(git log --grep="PRODUCTION" -n 1 --format="%H" || echo "none")
-          latest_commit=$(git rev-parse HEAD)
-          previous_commit=$(git rev-parse HEAD~1)
-          echo "Latest Commit SHA: $latest_commit"
-          echo "latest_commit=$latest_commit" >> $GITHUB_ENV
-          echo "Previous Commit SHA: $previous_commit"
-          echo "previous_commit=$previous_commit" >> $GITHUB_ENV
-          echo "Production Commit SHA: $production_commit"
-          echo "production_commit=$production_commit" >> $GITHUB_ENV
+    - name: Find Production Commit
+      run: |
+        production_commit=$(git log --grep="PRODUCTION" -n 1 --format="%H" || echo "none")
+        latest_commit=$(git rev-parse HEAD)
+        previous_commit=$(git rev-parse HEAD~1)
+        echo "Latest Commit SHA: $latest_commit"
+        echo "latest_commit=$latest_commit" >> $GITHUB_ENV
+        echo "Previous Commit SHA: $previous_commit"
+        echo "previous_commit=$previous_commit" >> $GITHUB_ENV
+        echo "Production Commit SHA: $production_commit"
+        echo "production_commit=$production_commit" >> $GITHUB_ENV
 
-      - name: Generate changes list
-        run: |
-          if [ "$production_commit" != "none" ]; then
-            echo "Comparing Production Commit ($production_commit) with Latest Commit ($latest_commit)"
-            git diff --name-only $production_commit $latest_commit > changes.txt
-          else
-            echo "No production commit found, using previous commit ($previous_commit) as baseline."
-            git diff --name-only $previous_commit $latest_commit > changes.txt
-
-      - name: Trigger Automic
-        run: |
-          while IFS= read -r file; do
-            if [ "$file" != ".github/workflows/trigger-automic.yml" ]; then
-              encoded_file=$(echo ${file} | sed 's#/#%2F#g')
-              if [ "$production_commit" != "none" ]; then
-                diff_link="https://github.com/Project-Hail-Mary/OPLAN/compare/${production_commit}...${latest_commit}?diff=split%26w=%26short_path=${encoded_file}"
-              else
-                diff_link="https://github.com/Project-Hail-Mary/OPLAN/compare/${previous_commit}...${latest_commit}?diff=split%26w=%26short_path=${encoded_file}"
-              fi
-              file_commit_link="https://github.com/Project-Hail-Mary/OPLAN/commit/${latest_commit}"
-              echo "Constructed diff link: ${diff_link}"
-
-              curl --location 'http://104.196.70.116:8088/ae/api/v1/103/executions' \
-                --header 'Content-Type: application/json' \
-                --user '103/UDM/UDM:udm' \
-                --data "{\"object_name\": \"GITHUB.PRE.APPROVE\", \"inputs\": {\"&FILE#\": \"${file_commit_link}\", \"&DIFF_LINK#\": \"${diff_link}\", \"&LATEST_COMMIT_SHA#\": \"${latest_commit}\"}}"
-            else
-              echo "Skipping curl command for .github/workflows/trigger-automic.yml"
-            fi
-          done < changes.txt
+        if [ "$production_commit" != "none" ]; then
+          echo "Comparing Production Commit ($production_commit) with Latest Commit ($latest_commit)"
+          git diff --name-only $production_commit $latest_commit > changes.txt
+        else
+          echo "No production commit found, using previous commit ($previous_commit) as baseline."
+          git diff --name-only $previous_commit $latest_commit > changes.txt
+        fi
