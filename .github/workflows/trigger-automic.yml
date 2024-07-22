@@ -1,54 +1,86 @@
-# Search for the most recent commit with a message containing 'PRODUCTION' on the main branch
-production_commit=$(git log main --grep='PRODUCTION' -1 --format='%H' || echo "none")
-latest_commit=$(git rev-parse HEAD)
+name: Find Production Commit
 
-if [ "$production_commit" == "none" ]; then
-  # If no 'PRODUCTION' commit is found, use the latest commit
-  production_commit=$latest_commit
-fi
+on:
+  push:
+    branches:
+      - main
 
-echo "Latest Commit SHA: $latest_commit"
-echo "latest_commit=$latest_commit" >> $GITHUB_ENV
-echo "Production Commit SHA: $production_commit"
-echo "production_commit=$production_commit" >> $GITHUB_ENV
+jobs:
+  find-production-commit:
+    runs-on: ubuntu-latest
 
-modified_file=$(jq -r '.head_commit.modified[0]' < $GITHUB_EVENT_PATH)
-echo "modified_file=$modified_file" >> $GITHUB_ENV
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
 
-if [ -z "$modified_file" ] || [ "$modified_file" == "null" ]; then
-  echo "No modified files detected, skipping diff generation."
-  exit 0
-fi
+    - name: Set up Git configuration
+      run: |
+        git config --global user.name 'github-actions[bot]'
+        git config --global user.email 'github-actions[bot]@users.noreply.github.com'
 
-if [ "$production_commit" != "$latest_commit" ]; then
-  echo "Comparing Production Commit ($production_commit) with Latest Commit ($latest_commit)"
-  git diff $production_commit $latest_commit -- $modified_file > changes.txt
-else
-  echo "Only one commit in the repository, comparing it to itself."
-  git diff $latest_commit $latest_commit -- $modified_file > changes.txt
-fi
+    - name: Get latest and production commit SHAs
+      id: get-commits
+      run: |
+        # Search for the most recent commit with a message containing 'PRODUCTION' on the main branch
+        production_commit=$(git log main --grep='PRODUCTION' -1 --format='%H' || echo "none")
+        latest_commit=$(git rev-parse HEAD)
 
-# Check if changes.txt exists before reading
-if [ -f changes.txt ]; then
-  while IFS= read -r file; do
-    if [ "$file" != ".github/workflows/trigger-automic.yml" ]; then
-      encoded_file=$(echo ${file} | sed 's#/#%2F#g')
-      if [ "$production_commit" != "$latest_commit" ]; then
-        diff_link="https://github.com/Project-Hail-Mary/OPLAN/compare/${production_commit}...${latest_commit}?diff=split%26w=1#diff-${encoded_file}"
-      else
-        diff_link="https://github.com/Project-Hail-Mary/OPLAN/commit/${latest_commit}?diff=split%26w=1#diff-${encoded_file}"
-      fi
-      file_commit_link="${latest_commit}"
-      echo "Constructed diff link: ${diff_link}"
+        if [ "$production_commit" == "none" ]; then
+          # If no 'PRODUCTION' commit is found, use the latest commit
+          production_commit=$latest_commit
+        fi
 
-      curl --location 'http://104.196.70.116:8088/ae/api/v1/103/executions' \
-        --header 'Content-Type: application/json' \
-        --user '103/UDM/UDM:udm' \
-        --data "{\"object_name\": \"GITHUB.PRE.APPROVE\", \"inputs\": {\"&FILE#\": \"${file_commit_link}\", \"&DIFF_LINK#\": \"${diff_link}\", \"&LATEST_COMMIT_SHA#\": \"${latest_commit}\"}}"
-    else
-      echo "Skipping curl command for .github/workflows/trigger-automic.yml"
-    fi
-  done < changes.txt
-else
-  echo "No changes.txt file found, skipping diff processing."
-fi
+        echo "Latest Commit SHA: $latest_commit"
+        echo "Production Commit SHA: $production_commit"
+        echo "latest_commit=$latest_commit" >> $GITHUB_ENV
+        echo "production_commit=$production_commit" >> $GITHUB_ENV
+
+    - name: Get modified file
+      id: get-modified-file
+      run: |
+        modified_file=$(jq -r '.head_commit.modified[0]' < $GITHUB_EVENT_PATH)
+        echo "modified_file=$modified_file" >> $GITHUB_ENV
+
+    - name: Check for modified files and generate diff
+      run: |
+        if [ -z "$modified_file" ] || [ "$modified_file" == "null" ]; then
+          echo "No modified files detected, skipping diff generation."
+          exit 0
+        fi
+
+        if [ "$production_commit" != "$latest_commit" ]; then
+          echo "Comparing Production Commit ($production_commit) with Latest Commit ($latest_commit)"
+          git diff $production_commit $latest_commit -- $modified_file > changes.txt
+        else
+          echo "Only one commit in the repository, comparing it to itself."
+          git diff $latest_commit $latest_commit -- $modified_file > changes.txt
+        fi
+
+    - name: Process diff changes
+      if: success() && steps.get-modified-file.outputs.modified_file != 'null'
+      run: |
+        if [ -f changes.txt ]; then
+          while IFS= read -r file; do
+            if [ "$file" != ".github/workflows/trigger-automic.yml" ]; then
+              encoded_file=$(echo ${file} | sed 's#/#%2F#g')
+              if [ "$production_commit" != "$latest_commit" ]; then
+                diff_link="https://github.com/Project-Hail-Mary/OPLAN/compare/${production_commit}...${latest_commit}?diff=split%26w=1#diff-${encoded_file}"
+              else
+                diff_link="https://github.com/Project-Hail-Mary/OPLAN/commit/${latest_commit}?diff=split%26w=1#diff-${encoded_file}"
+              fi
+              file_commit_link="${latest_commit}"
+              echo "Constructed diff link: ${diff_link}"
+
+              curl --location 'http://104.196.70.116:8088/ae/api/v1/103/executions' \
+                --header 'Content-Type: application/json' \
+                --user '103/UDM/UDM:udm' \
+                --data "{\"object_name\": \"GITHUB.PRE.APPROVE\", \"inputs\": {\"&FILE#\": \"${file_commit_link}\", \"&DIFF_LINK#\": \"${diff_link}\", \"&LATEST_COMMIT_SHA#\": \"${latest_commit}\"}}"
+            else
+              echo "Skipping curl command for .github/workflows/trigger-automic.yml"
+            fi
+          done < changes.txt
+        else
+          echo "No changes.txt file found, skipping diff processing."
+        fi
