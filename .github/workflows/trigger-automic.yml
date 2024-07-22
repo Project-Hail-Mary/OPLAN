@@ -67,7 +67,15 @@ jobs:
         echo "Latest Commit Link: $file_commit_link"
         echo "Diff Link: $diff_link"
         
+        payload=$(jq -n \
+          --arg latest_commit "$latest_commit" \
+          --arg file_commit_link "$file_commit_link" \
+          --arg diff_link "$diff_link" \
+          '{object_name: "GITHUB.PRE.APPROVE", inputs: {"&FILE#": $file_commit_link, "&DIFF_LINK#": $diff_link, "&LATEST_COMMIT_SHA#": $latest_commit}}')
+        
+        echo "Payload: $payload"
+        
         curl --location 'http://104.196.70.116:8088/ae/api/v1/103/executions' \
           --header 'Content-Type: application/json' \
           --user '103/UDM/UDM:udm' \
-          --data "{\"object_name\": \"GITHUB.PRE.APPROVE\", \"inputs\": {\"&FILE#\": \"${file_commit_link}\", \"&DIFF_LINK#\": \"${diff_link}\", \"&LATEST_COMMIT_SHA#\": \"${latest_commit}\"}}"
+          --data "$payload"
