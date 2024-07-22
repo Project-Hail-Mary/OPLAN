@@ -78,10 +78,10 @@ jobs:
             if [ "$updated_file" != ".github/workflows/trigger-automic.yml" ]; then
               encoded_file=$(echo ${updated_file} | sed 's#/#%2F#g')
               if [ "$base_commit" != "$latest_commit" ]; then
-                diff_link="https://github.com/Project-Hail-Mary/OPLAN/compare/${base_commit}...${latest_commit}?diff=split%26w=%26short_path=${encoded_file}"
+                diff_link="https://github.com/Project-Hail-Mary/OPLAN/compare/${base_commit}...${latest_commit}?diff=split&file=${encoded_file}"
                 file_diff=$(git diff ${base_commit} ${latest_commit} -- ${updated_file})
               else
-                diff_link="https://github.com/Project-Hail-Mary/OPLAN/commit/${latest_commit}?diff=split%26w=%26short_path=${encoded_file}"
+                diff_link="https://github.com/Project-Hail-Mary/OPLAN/commit/${latest_commit}?diff=split&file=${encoded_file}"
                 file_diff=$(git show ${latest_commit} -- ${updated_file})
               fi
               file_commit_link="${latest_commit}"
