@@ -1,81 +1,47 @@
-name: Find Production Commit and Generate Diff
+name: Create Diff and Notify Automic
 
-on: [push]
+on:
+  push:
+    branches:
+      - main  # Adjust if you want this to run on different branches
 
 jobs:
-  find-production-commit:
+  create-diff-and-notify:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout Repository
-      uses: actions/checkout@v3
-      with:
-        fetch-depth: 0
+      - name: Checkout repository
+        uses: actions/checkout@v3
 
-    - name: Set up Git
-      run: |
-        git config --global user.name 'github-actions[bot]'
-        git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+      - name: Get latest commit message and file
+        id: get_commit_info
+        run: |
+          LATEST_COMMIT_SHA=$(git rev-parse HEAD)
+          COMMITTED_FILE=$(git diff-tree --no-commit-id --name-only -r $LATEST_COMMIT_SHA)
+          echo "LATEST_COMMIT_SHA=${LATEST_COMMIT_SHA}" >> $GITHUB_ENV
+          echo "COMMITTED_FILE=${COMMITTED_FILE}" >> $GITHUB_ENV
 
-    - name: Find Production Commit
-      id: find_commit
-      run: |
-        production_commit=$(git log --grep="PRODUCTION" -n 1 --format="%H" || echo "none")
-        latest_commit=$(git rev-parse HEAD)
-        previous_commit=$(git rev-parse HEAD~1)
-        echo "Latest Commit SHA: $latest_commit"
-        echo "Previous Commit SHA: $previous_commit"
-        echo "Production Commit SHA: $production_commit"
-        echo "production_commit=$production_commit" >> $GITHUB_ENV
-        echo "latest_commit=$latest_commit" >> $GITHUB_ENV
-        echo "previous_commit=$previous_commit" >> $GITHUB_ENV
+      - name: Get baseline commit
+        id: get_baseline_commit
+        run: |
+          BASELINE_COMMIT=$(git log --grep="PRODUCTION" -n 1 --pretty=format:%H || git rev-parse HEAD^)
+          echo "BASELINE_COMMIT=${BASELINE_COMMIT}" >> $GITHUB_ENV
 
-    - name: Get Committed File
-      id: get_file
-      run: |
-        committed_file=$(git diff --name-only HEAD~1 HEAD)
-        echo "Committed file: $committed_file"
-        echo "committed_file=$committed_file" >> $GITHUB_ENV
+      - name: Generate diff
+        id: generate_diff
+        run: |
+          DIFF=$(git diff $BASELINE_COMMIT $LATEST_COMMIT_SHA -- ${{ env.COMMITTED_FILE }})
+          echo "DIFF=${DIFF}" >> $GITHUB_ENV
 
-    - name: Generate Diff for Committed File
-      id: generate_diff
-      run: |
-        production_commit=${{ env.production_commit }}
-        latest_commit=${{ env.latest_commit }}
-        previous_commit=${{ env.previous_commit }}
-        committed_file=${{ env.committed_file }}
-        
-        if [ "$production_commit" != "none" ]; then
-          echo "Using Production Commit as baseline."
-          baseline_commit=$production_commit
-        else
-          echo "Using Previous Commit as baseline."
-          baseline_commit=$previous_commit
-        fi
-        
-        diff_link="https://github.com/Project-Hail-Mary/OPLAN/compare/$baseline_commit...$latest_commit?diff=split&w=1&short_path=$committed_file"
-        
-        echo "diff_link=$diff_link" >> $GITHUB_ENV
-        echo "Diff Link: $diff_link"
+      - name: Create diff link (e.g., using a gist or another service)
+        id: create_diff_link
+        run: |
+          DIFF_LINK="https://example.com/diff/${{ github.sha }}" # Replace this with actual logic to host the diff
+          echo "DIFF_LINK=${DIFF_LINK}" >> $GITHUB_ENV
 
-    - name: Call Automic
-      run: |
-        latest_commit=${{ env.latest_commit }}
-        diff_link=${{ env.diff_link }}
-        file_commit_link="https://github.com/Project-Hail-Mary/OPLAN/commit/${latest_commit}"
-        
-        echo "Latest Commit Link: $file_commit_link"
-        echo "Diff Link: $diff_link"
-        
-        payload=$(jq -n \
-          --arg latest_commit "$latest_commit" \
-          --arg file_commit_link "$file_commit_link" \
-          --arg diff_link "$diff_link" \
-          '{object_name: "GITHUB.PRE.APPROVE", inputs: {"&FILE#": $file_commit_link, "&DIFF_LINK#": $diff_link, "&LATEST_COMMIT_SHA#": $latest_commit}}')
-        
-        echo "Payload: $payload"
-        
-        curl --location 'http://104.196.70.116:8088/ae/api/v1/103/executions' \
+      - name: Notify Automic Automation
+        run: |
+          curl --location 'http://104.196.70.116:8088/ae/api/v1/103/executions' \
           --header 'Content-Type: application/json' \
           --user '103/UDM/UDM:udm' \
-          --data "$payload"
+          --data "{\"object_name\": \"GITHUB.PRE.APPROVE\", \"inputs\": {\"&FILE#\": \"${{ env.COMMITTED_FILE }}\", \"&DIFF_LINK#\": \"${{ env.DIFF_LINK }}\", \"&LATEST_COMMIT_SHA#\": \"${{ env.LATEST_COMMIT_SHA }}\"}}"
