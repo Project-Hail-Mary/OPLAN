@@ -38,7 +38,7 @@ jobs:
           echo "Latest Commit SHA: $latest_commit"
           echo "latest_commit=$latest_commit" >> $GITHUB_ENV
 
-      - name: Generate changes list
+      - name: Determine base commit
         run: |
           set -e
 
@@ -55,23 +55,24 @@ jobs:
           echo "Base Commit SHA: $base_commit"
           echo "base_commit=$base_commit" >> $GITHUB_ENV
 
-          git diff --name-only $base_commit $latest_commit > changes.txt
-
-      - name: Display changes
+      - name: Identify the updated file
+        id: updated_file
         run: |
-          echo "Changed files:"
-          cat changes.txt
+          set -e
+          updated_file=$(git diff-tree --no-commit-id --name-only -r $latest_commit)
+          echo "Updated file: $updated_file"
+          echo "updated_file=$updated_file" >> $GITHUB_ENV
 
       - name: Trigger Automic
         run: |
           set -e
+          updated_file=${{ steps.updated_file.outputs.updated_file }}
           
-          if [ -s changes.txt ]; then
-            file=$(head -n 1 changes.txt)
-            echo "Processing file: $file"
+          if [ -n "$updated_file" ]; then
+            echo "Processing file: $updated_file"
 
-            if [ "$file" != ".github/workflows/trigger-automic.yml" ]; then
-              encoded_file=$(echo ${file} | sed 's#/#%2F#g')
+            if [ "$updated_file" != ".github/workflows/trigger-automic.yml" ]; then
+              encoded_file=$(echo ${updated_file} | sed 's#/#%2F#g')
               if [ "$base_commit" != "$latest_commit" ]; then
                 diff_link="https://github.com/Project-Hail-Mary/OPLAN/compare/${base_commit}...${latest_commit}?diff=split%26w=%26short_path=${encoded_file}"
               else
@@ -89,7 +90,7 @@ jobs:
               echo "Skipping curl command for .github/workflows/trigger-automic.yml"
             fi
           else
-            echo "No changes detected."
+            echo "No updated file detected."
           fi
 
       - name: Log Completion
