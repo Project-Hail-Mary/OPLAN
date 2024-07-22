@@ -22,8 +22,8 @@ jobs:
 
       - name: Find production commit
         run: |
-          # Search for the most recent commit with a message containing 'PRODUCTION'
-          production_commit=$(git log --grep='PRODUCTION' -1 --format='%H' || echo "none")
+          # Search for the most recent commit with a message containing 'PRODUCTION' on the main branch
+          production_commit=$(git log main --grep='PRODUCTION' -1 --format='%H' || echo "none")
           latest_commit=$(git rev-parse HEAD)
           
           if [ "$production_commit" == "none" ]; then
@@ -52,9 +52,9 @@ jobs:
             if [ "$file" != ".github/workflows/trigger-automic.yml" ]; then
               encoded_file=$(echo ${file} | sed 's#/#%2F#g')
               if [ "$production_commit" != "$latest_commit" ]; then
-                diff_link="https://github.com/Project-Hail-Mary/OPLAN/compare/${production_commit}...${latest_commit}?diff=split%26w=%26short_path=${encoded_file}"
+                diff_link="https://github.com/Project-Hail-Mary/OPLAN/compare/${production_commit}...${latest_commit}?diff=split%26w=1#diff-${encoded_file}"
               else
-                diff_link="https://github.com/Project-Hail-Mary/OPLAN/commit/${latest_commit}?diff=split%26w=%26short_path=${encoded_file}"
+                diff_link="https://github.com/Project-Hail-Mary/OPLAN/commit/${latest_commit}?diff=split%26w=1#diff-${encoded_file}"
               fi
               file_commit_link="${latest_commit}"
               echo "Constructed diff link: ${diff_link}"
