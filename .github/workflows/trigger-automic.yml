@@ -79,15 +79,14 @@ jobs:
               encoded_file=$(echo ${updated_file} | sed 's#/#%2F#g')
               if [ "$base_commit" != "$latest_commit" ]; then
                 diff_link="https://github.com/Project-Hail-Mary/OPLAN/compare/${base_commit}...${latest_commit}?diff=split&file=${encoded_file}"
-                file_diff=$(git diff ${base_commit} ${latest_commit} -- ${updated_file})
+                file_diff=$(git diff ${base_commit} ${latest_commit} -- ${updated_file} | base64)
               else
                 diff_link="https://github.com/Project-Hail-Mary/OPLAN/commit/${latest_commit}?diff=split&file=${encoded_file}"
-                file_diff=$(git show ${latest_commit} -- ${updated_file})
+                file_diff=$(git show ${latest_commit} -- ${updated_file} | base64)
               fi
               file_commit_link="${latest_commit}"
               echo "Constructed diff link: ${diff_link}"
               echo "File Commit Link: ${file_commit_link}"
-              echo "File Diff: $file_diff"
 
               curl --location 'http://104.196.70.116:8088/ae/api/v1/103/executions' \
                 --header 'Content-Type: application/json' \
