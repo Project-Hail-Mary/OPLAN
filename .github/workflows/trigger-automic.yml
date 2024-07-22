@@ -54,22 +54,22 @@ jobs:
           echo "base_commit=$base_commit" >> $GITHUB_ENV
 
       - name: Identify the updated file
-        id: updated_file
+        id: identify_updated_file
         run: |
           set -e
           updated_file=$(git diff-tree --no-commit-id --name-only -r $latest_commit)
           echo "Updated file(s): $updated_file"
-          echo "updated_file=$updated_file" >> $GITHUB_ENV
+          echo "::set-output name=updated_file::$updated_file"
 
       - name: Log updated file
         run: |
           set -e
-          echo "Updated file from env: ${{ steps.updated_file.outputs.updated_file }}"
+          echo "Updated file from env: ${{ steps.identify_updated_file.outputs.updated_file }}"
 
       - name: Trigger Automic
         run: |
           set -e
-          updated_file=${{ steps.updated_file.outputs.updated_file }}
+          updated_file="${{ steps.identify_updated_file.outputs.updated_file }}"
           echo "Updated file for processing: $updated_file"
 
           if [ -n "$updated_file" ]; then
