@@ -22,8 +22,15 @@ jobs:
 
       - name: Find production commit
         run: |
-          production_commit=$(git rev-list -n 1 refs/tags/PRODUCTION || echo "none")
+          # Search for the most recent commit with a message containing 'PRODUCTION'
+          production_commit=$(git log --grep='PRODUCTION' -1 --format='%H' || echo "none")
           latest_commit=$(git rev-parse HEAD)
+          
+          if [ "$production_commit" == "none" ]; then
+            # If no 'PRODUCTION' commit is found, use the latest commit
+            production_commit=$latest_commit
+          fi
+
           echo "Latest Commit SHA: $latest_commit"
           echo "latest_commit=$latest_commit" >> $GITHUB_ENV
           echo "Production Commit SHA: $production_commit"
@@ -31,11 +38,11 @@ jobs:
 
       - name: Generate changes list
         run: |
-          if [ "$production_commit" != "none" ]; then
+          if [ "$production_commit" != "$latest_commit" ]; then
             echo "Comparing Production Commit ($production_commit) with Latest Commit ($latest_commit)"
             git diff --name-only $production_commit $latest_commit > changes.txt
           else
-            echo "Production tag not found, using latest commit as baseline."
+            echo "Only one commit in the repository, comparing it to itself."
             echo "$latest_commit" > changes.txt
           fi
 
@@ -44,7 +51,7 @@ jobs:
           while IFS= read -r file; do
             if [ "$file" != ".github/workflows/trigger-automic.yml" ]; then
               encoded_file=$(echo ${file} | sed 's#/#%2F#g')
-              if [ "$production_commit" != "none" ]; then
+              if [ "$production_commit" != "$latest_commit" ]; then
                 diff_link="https://github.com/Project-Hail-Mary/OPLAN/compare/${production_commit}...${latest_commit}?diff=split%26w=%26short_path=${encoded_file}"
               else
                 diff_link="https://github.com/Project-Hail-Mary/OPLAN/commit/${latest_commit}?diff=split%26w=%26short_path=${encoded_file}"
