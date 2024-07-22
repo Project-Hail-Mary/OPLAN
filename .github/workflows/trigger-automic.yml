@@ -1,4 +1,4 @@
-name: Find Production Commit
+name: Find Production Commit and Generate Diff
 
 on: [push]
 
@@ -18,6 +18,7 @@ jobs:
         git config --global user.email 'github-actions[bot]@users.noreply.github.com'
 
     - name: Find Production Commit
+      id: find_commit
       run: |
         production_commit=$(git log --grep="PRODUCTION" -n 1 --format="%H" || echo "none")
         latest_commit=$(git rev-parse HEAD)
@@ -25,22 +26,23 @@ jobs:
         echo "Latest Commit SHA: $latest_commit"
         echo "Previous Commit SHA: $previous_commit"
         echo "Production Commit SHA: $production_commit"
-        echo "production_commit=$production_commit" >> $GITHUB_ENV
-        echo "latest_commit=$latest_commit" >> $GITHUB_ENV
-        echo "previous_commit=$previous_commit" >> $GITHUB_ENV
+        echo "::set-output name=production_commit::$production_commit"
+        echo "::set-output name=latest_commit::$latest_commit"
+        echo "::set-output name=previous_commit::$previous_commit"
 
     - name: Get Committed File
+      id: get_file
       run: |
         committed_file=$(git diff --name-only HEAD~1 HEAD)
         echo "Committed file: $committed_file"
-        echo "committed_file=$committed_file" >> $GITHUB_ENV
+        echo "::set-output name=committed_file::$committed_file"
 
     - name: Generate Diff for Committed File
       run: |
-        production_commit=${{ env.production_commit }}
-        latest_commit=${{ env.latest_commit }}
-        previous_commit=${{ env.previous_commit }}
-        committed_file=${{ env.committed_file }}
+        production_commit=${{ steps.find_commit.outputs.production_commit }}
+        latest_commit=${{ steps.find_commit.outputs.latest_commit }}
+        previous_commit=${{ steps.find_commit.outputs.previous_commit }}
+        committed_file=${{ steps.get_file.outputs.committed_file }}
         
         if [ "$production_commit" != "none" ]; then
           echo "Using Production Commit as baseline."
@@ -52,15 +54,15 @@ jobs:
 
     - name: Call Automic
       run: |
-        latest_commit=${{ env.latest_commit }}
-        committed_file=${{ env.committed_file }}
+        latest_commit=${{ steps.find_commit.outputs.latest_commit }}
+        committed_file=${{ steps.get_file.outputs.committed_file }}
         diff_link="https://github.com/Project-Hail-Mary/OPLAN/commit/${latest_commit}"
         file_commit_link="https://github.com/Project-Hail-Mary/OPLAN/commit/${latest_commit}"
         
         payload=$(jq -n \
           --arg latest_commit "$latest_commit" \
-          --arg previous_commit "$previous_commit" \
-          --arg production_commit "$production_commit" \
+          --arg previous_commit "${{ steps.find_commit.outputs.previous_commit }}" \
+          --arg production_commit "${{ steps.find_commit.outputs.production_commit }}" \
           --arg changes "$(cat changes.txt)" \
           '{latest_commit: $latest_commit, previous_commit: $previous_commit, production_commit: $production_commit, changes: $changes}')
 
