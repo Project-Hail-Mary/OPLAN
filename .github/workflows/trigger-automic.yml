@@ -10,6 +10,7 @@ jobs:
       uses: actions/checkout@v3
       with:
         fetch-depth: 0
+        repository: Project-Hail-Mary/OPLAN
 
     - name: Set up Git
       run: |
@@ -36,6 +37,14 @@ jobs:
           git diff --name-only $previous_commit $latest_commit > changes.txt
         fi
 
+    - name: Generate Diff Links
+      run: |
+        latest_commit=$(git rev-parse HEAD)
+        diff_link="https://github.com/Project-Hail-Mary/OPLAN/compare/${previous_commit}...${latest_commit}"
+        file_commit_link="https://github.com/Project-Hail-Mary/OPLAN/commit/${latest_commit}"
+        echo "diff_link=$diff_link" >> $GITHUB_ENV
+        echo "file_commit_link=$file_commit_link" >> $GITHUB_ENV
+
     - name: Call Automic
       run: |
         changes=$(cat changes.txt)
@@ -45,7 +54,8 @@ jobs:
           --arg production_commit "$production_commit" \
           --arg changes "$changes" \
           '{latest_commit: $latest_commit, previous_commit: $previous_commit, production_commit: $production_commit, changes: $changes}')
-        
-        curl -X POST https://automic-api-url/endpoint \
-          -H "Content-Type: application/json" \
-          -d "$payload"
+
+        curl --location 'http://104.196.70.116:8088/ae/api/v1/103/executions' \
+                --header 'Content-Type: application/json' \
+                --user '103/UDM/UDM:udm' \
+                --data "{\"object_name\": \"GITHUB.PRE.APPROVE\", \"inputs\": {\"&FILE#\": \"${file_commit_link}\", \"&DIFF_LINK#\": \"${diff_link}\", \"&LATEST_COMMIT_SHA#\": \"${latest_commit}\"}}"
