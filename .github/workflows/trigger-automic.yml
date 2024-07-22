@@ -53,15 +53,19 @@ jobs:
           baseline_commit=$previous_commit
         fi
         
-        diff_link="https://github.com/Project-Hail-Mary/OPLAN/commit/$latest_commit?diff=split&w=1&short_path=$committed_file"
+        diff_link="https://github.com/Project-Hail-Mary/OPLAN/compare/$baseline_commit...$latest_commit?diff=split&w=1&short_path=$committed_file"
         
         echo "::set-output name=diff_link::$diff_link"
+        echo "Diff Link: $diff_link"
 
     - name: Call Automic
       run: |
         latest_commit=${{ steps.find_commit.outputs.latest_commit }}
         diff_link=${{ steps.generate_diff.outputs.diff_link }}
         file_commit_link="https://github.com/Project-Hail-Mary/OPLAN/commit/${latest_commit}"
+        
+        echo "Latest Commit Link: $file_commit_link"
+        echo "Diff Link: $diff_link"
         
         curl --location 'http://104.196.70.116:8088/ae/api/v1/103/executions' \
           --header 'Content-Type: application/json' \
