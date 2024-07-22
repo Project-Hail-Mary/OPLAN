@@ -57,19 +57,31 @@ jobs:
           git diff --name-only $comparison_commit $latest_commit > changes.txt
           cat changes.txt
 
+      - name: Generate specific diff file
+        run: |
+          file=$(cat changes.txt | head -n 1)
+          if [ "$file" != ".github/workflows/trigger-automic.yml" ]; then
+            git diff ${{ steps.determine_commit.outputs.comparison_commit }} ${{ steps.find_commit.outputs.latest_commit }} -- $file > specific_diff.txt
+          fi
+          cat specific_diff.txt
+
       - name: Trigger Automic
         run: |
           file=$(cat changes.txt | head -n 1)
           if [ "$file" != ".github/workflows/trigger-automic.yml" ]; then
             encoded_file=$(echo ${file} | sed 's#/#%2F#g')
-            diff_link="https://github.com/Project-Hail-Mary/OPLAN/compare/${{ steps.determine_commit.outputs.comparison_commit }}...${{ steps.find_commit.outputs.latest_commit }}?diff=split%26w=%26short_path=${encoded_file}"
+            diff_link="https://github.com/Project-Hail-Mary/OPLAN/compare/${{ steps.determine_commit.outputs.comparison_commit }}...${{ steps.find_commit.outputs.latest_commit }}"
             file_commit_link="${{ steps.find_commit.outputs.latest_commit }}"
             echo "Constructed diff link: ${diff_link}"
+
+            specific_diff=$(cat specific_diff.txt)
+            echo "Specific diff for $file:"
+            echo "$specific_diff"
 
             curl --location 'http://104.196.70.116:8088/ae/api/v1/103/executions' \
               --header 'Content-Type: application/json' \
               --user '103/UDM/UDM:udm' \
-              --data "{\"object_name\": \"GITHUB.PRE.APPROVE\", \"inputs\": {\"&FILE#\": \"${file_commit_link}\", \"&DIFF_LINK#\": \"${diff_link}\", \"&LATEST_COMMIT_SHA#\": \"${{ steps.find_commit.outputs.latest_commit }}\"}}"
+              --data "{\"object_name\": \"GITHUB.PRE.APPROVE\", \"inputs\": {\"&FILE#\": \"${file_commit_link}\", \"&DIFF_LINK#\": \"${diff_link}\", \"&LATEST_COMMIT_SHA#\": \"${{ steps.find_commit.outputs.latest_commit }}\", \"&DIFF_CONTENT#\": \"${specific_diff}\"}}"
           else
             echo "Skipping curl command for .github/workflows/trigger-automic.yml"
           fi
